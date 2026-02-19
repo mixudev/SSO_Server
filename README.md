@@ -1,307 +1,175 @@
-# 🔐 MixuAuth SSO Server
+# MixuAuth SSO Server
 
-<div align="center">
+> Centralized Single Sign-On built on OAuth2 Authorization Code Flow — powered by Laravel & Passport.
 
-**MixuAuth** adalah sistem **Single Sign-On (SSO)** terpusat berbasis **OAuth2 Authorization Code Flow** yang dibangun dengan **Laravel** dan **Laravel Passport**.
-
-[![Laravel](https://img.shields.io/badge/Laravel-12.x-red.svg)](https://laravel.com)
-[![PHP](https://img.shields.io/badge/PHP-8.2+-blue.svg)](https://php.net)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-**Satu kali login, akses semua aplikasi client yang terhubung.**
-
-</div>
+[![Laravel](https://img.shields.io/badge/Laravel-12.x-FF2D20?style=flat-square&logo=laravel&logoColor=white)](https://laravel.com)
+[![PHP](https://img.shields.io/badge/PHP-8.2+-777BB4?style=flat-square&logo=php&logoColor=white)](https://php.net)
+[![License](https://img.shields.io/badge/License-MIT-22C55E?style=flat-square)](LICENSE)
 
 ---
 
-## 🎯 Tentang MixuAuth
+## Overview
 
-**MixuAuth** adalah auth server terpusat yang mengimplementasikan **Single Sign-On (SSO)** berbasis **OAuth2 Authorization Code Flow**.  
-Satu kali login di Auth Server, pengguna dapat mengakses berbagai aplikasi client yang terdaftar.
+**MixuAuth** is a centralized authentication server that implements Single Sign-On (SSO) via the OAuth2 Authorization Code Flow. Users authenticate once at the Auth Server and gain seamless access to every registered client application — no repeated logins.
 
-### Peran MixuAuth
+### Responsibilities
 
-- **🔑 Identity Provider**: Pusat identitas pengguna terpusat
-- **🎫 OAuth2 Server**: Penerbit access token & refresh token
-- **👥 Role & Access Controller**: Pengelola role dan access area
-- **🔒 Token Issuer**: Pengelola siklus hidup token dengan keamanan tinggi
-- **🛡️ Security Central**: Pusat keamanan untuk semua aplikasi client
-
----
-
-### Fitur Utama
-
-- **Autentikasi Pengguna**
-  - Register, login, logout
-  - Reset password
-  - (Opsional) email verification
-
-- **OAuth2 Server (Laravel Passport)**
-  - Authorization Code Grant
-  - Endpoint standar:
-    - `/oauth/authorize`
-    - `/oauth/token`
-
-- **Manajemen Role**
-  - Role many-to-many dengan user
-  - Contoh role: `super_admin`, `admin`, `editor`
-
-- **Access Area Control**
-  - Menentukan aplikasi mana yang boleh diakses user
-  - Mengirim daftar `roles` dan `access_areas` di response `/api/user`
-
-- **Keamanan Produksi**
-  - Wajib HTTPS
-  - Expiry token terkonfigurasi
-  - Validasi redirect URI
-  - Rate limiting (throttle)
+| Role | Description |
+|------|-------------|
+| Identity Provider | Central repository for all user identities |
+| OAuth2 Server | Issues and manages access tokens & refresh tokens |
+| Role & Access Controller | Governs user roles and application-level access areas |
+| Security Hub | Enforces token lifecycle, HTTPS, and redirect URI validation |
 
 ---
 
-### Teknologi
+## Features
 
-- **Backend**: Laravel
-- **Auth & OAuth2**: Laravel Passport
-- **Auth UI**: Laravel Breeze (Blade stack)
-- **Database**: MySQL / MariaDB
+### Authentication
+- User registration, login, logout, and password reset
+- Optional email verification
+- Session-based authentication powered by Laravel Breeze (Blade)
 
----
+### OAuth2 (Laravel Passport)
+- Authorization Code Grant flow
+- Standard endpoints: `/oauth/authorize`, `/oauth/token`
 
-### Arsitektur Singkat
+### Role & Access Management
+- Many-to-many role assignments per user (`super_admin`, `admin`, `editor`)
+- Access area control — define which applications each user may access
+- Roles and access areas returned via `/api/user`
 
-Alur SSO (Authorization Code Flow):
-
-1. Client App mengarahkan user ke halaman login Auth Server.
-2. User login di Auth Server.
-3. Auth Server mengirimkan **authorization code** ke Client App.
-4. Client App menukar code ke **access token** (dan refresh token).
-5. Client App menggunakan token untuk memanggil API Auth Server (misalnya `/api/user`).
-6. User otomatis login di Client App berdasarkan data dari Auth Server.
-
----
-
-### Struktur Data Inti
-
-- **`users`**
-  - `id`, `name`, `email`, `password`, `status`, timestamps
-
-- **`user_admin_infos`**
-  - Profil admin: `user_id`, `phone`, `address`, `avatar`
-
-- **`roles`**
-  - `id`, `name`, `description`
-  - Contoh: `super_admin`, `admin`, `editor`
-
-- **`role_user` (pivot)**
-  - Many-to-many antara user dan role
-
-- **`access_areas`**
-  - `id`, `name`, `slug`, `description`
-  - Contoh: `supervisor`, `portal`, `reporting`
-
-- **`access_area_user` (pivot)**
-  - Many-to-many antara user dan access area
-
-- **Tabel OAuth (dari Passport)**
-  - `oauth_clients`, `oauth_access_tokens`, dll.
+### Security
+- HTTPS enforced in production
+- Configurable token expiry (30-minute access tokens, 7-day refresh tokens)
+- Redirect URI validation
+- CSRF state parameter
+- Rate limiting via throttle middleware
 
 ---
 
-### Dummy Data & Akun Default
+## SSO Flow
 
-Seeder utama berada di `database/seeders/DatabaseSeeder.php` dan akan membuat:
-
-- **Role**
-  - `super_admin` – akses penuh ke seluruh fitur Auth/SSO
-  - `admin` – kelola user dan access area
-  - `editor` – kelola konten pada access area tertentu
-
-- **Access Area (contoh aplikasi)**
-  - `supervisor` – Supervisor backend service
-  - `portal` – Main web portal
-  - `reporting` – Reporting & analytics dashboard
-
-- **User Dummy**
-  - **Super Admin**
-    - Email: `admin@sso.test`
-    - Password: `password`
-    - Role: `super_admin`, `admin`
-    - Access Area: `supervisor`, `portal`, `reporting`
-
-  - **Portal Admin**
-    - Email: `admin.portal@sso.test`
-    - Password: `password`
-    - Role: `admin`
-    - Access Area: `portal`, `reporting`
-
-  - **Portal Editor**
-    - Email: `editor.portal@sso.test`
-    - Password: `password`
-    - Role: `editor`
-    - Access Area: `portal`
-
-Seeder dibuat **idempotent**: aman dijalankan berulang tanpa menduplikasi role/access area/pivot.
+```
+User visits Client App
+       │
+       ▼
+Client redirects → /oauth/authorize (SSO Server)
+       │
+       ▼
+User authenticates at SSO Server
+       │
+       ▼
+SSO Server returns authorization code → Client callback URI
+       │
+       ▼
+Client exchanges code → /oauth/token → receives access token
+       │
+       ▼
+Client calls /api/user → receives user info, roles, access areas
+       │
+       ▼
+Client creates local session → User is authenticated
+```
 
 ---
 
-## 🚀 Quick Start
+## Architecture
 
-### Instalasi Cepat
+```
+┌──────────────────────────────────────────────────────┐
+│                  MixuAuth SSO Server                 │
+│               (127.0.0.1:8000)                       │
+│                                                      │
+│    Login UI (Breeze)   ·   OAuth2 (Passport)        │
+│    Role Manager        ·   Access Control            │
+│    Token Manager       ·   API Endpoints             │
+└──────────────────────────────────────────────────────┘
+                         │
+              OAuth2 Authorization Code Flow
+                         │
+          ┌──────────────┼──────────────┐
+          ▼              ▼              ▼
+   Client App 1    Client App 2    Client App N
+```
+
+---
+
+## Quick Start
 
 ```bash
 # 1. Install dependencies
-composer install
-npm install
+composer install && npm install
 
-# 2. Setup environment
+# 2. Configure environment
 cp .env.example .env
 php artisan key:generate
 
-# 3. Edit .env (database config)
-# DB_DATABASE=sso_server
-# DB_USERNAME=root
-# DB_PASSWORD=your_password
+# 3. Set database credentials in .env
+#    DB_DATABASE=sso_server
+#    DB_USERNAME=root
+#    DB_PASSWORD=your_password
 
-# 4. Buat database & migrate
+# 4. Create database and run migrations
 mysql -u root -p -e "CREATE DATABASE sso_server;"
 php artisan migrate --seed
 
-# 5. Install Passport
+# 5. Install Passport (OAuth2 keys & default clients)
 php artisan passport:install
 
-# 6. Buat OAuth client untuk client app
+# 6. Register an OAuth client for your client application
 php artisan passport:client
-# Pilih: 0 (authorization_code)
-# Isi: Name & Redirect URI
+# Select type: 0 (authorization_code)
+# Provide a name and redirect URI
 
-# 7. Build frontend
+# 7. Build frontend assets
 npm run build
 
-# 8. Jalankan server
+# 8. Start development server
 php artisan serve
 ```
 
-**Server akan berjalan di:** `http://127.0.0.1:8000`
+Server runs at `http://127.0.0.1:8000`
 
-**Login dengan:**
-- Email: `admin@sso.test`
-- Password: `password`
+Default login: `admin@sso.test` / `password`
 
 ---
 
-## 📚 Dokumentasi Lengkap
+## API Reference
 
-### 🎓 Panduan Utama
-
-- **[📖 Complete Integration Guide](docs/SSO_COMPLETE_GUIDE.md)**  
-  Panduan lengkap alur login SSO, setup server & client, testing, troubleshooting. **Mulai dari sini!**
-
-- **[✅ Setup Checklist](docs/SETUP_CHECKLIST.md)**  
-  Checklist step-by-step untuk setup SSO Server dan Client App dari awal sampai siap digunakan
-
-- **[⚡ Quick Reference](docs/QUICK_REFERENCE.md)**  
-  Command cheat sheet, troubleshooting quick fix, common workflows, default credentials
-
-- **[💻 Terminal Commands Guide](docs/TERMINAL_COMMANDS_GUIDE.md)**  
-  Panduan lengkap semua command terminal dengan detail interaksi (yes/no, input, dll)
-
-### 🔌 Panduan Integrasi Client
-
-- **[🚪 Client Logout Guide](docs/CLIENT_LOGOUT_GUIDE.md)**  
-  Panduan implementasi logout di client app (session & token management)
-
-- **[💻 Client Example Code](docs/CLIENT_EXAMPLE_CODE.md)**  
-  Contoh kode lengkap untuk Laravel client dan JavaScript/SPA client
-
-### 📋 Dokumentasi Pendukung
-
-- **[📄 Client System Design](README_CLIENTS.md)**  
-  Rancangan sistem client apps yang terintegrasi dengan MixuAuth
-
----
-
-## 🏗️ Arsitektur Sistem
+### Authorization Endpoint
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    MixuAuth SSO Server                      │
-│                  (127.0.0.1:8000)                          │
-│                                                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │   Login UI   │  │ OAuth2 Flow  │  │  API Endpoint│     │
-│  │  (Breeze)    │  │  (Passport)  │  │  (/api/user) │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-│                                                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ Role Manager │  │Access Control │  │Token Manager │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            │ OAuth2 Flow
-                            │
-        ┌───────────────────┼───────────────────┐
-        │                   │                   │
-        ▼                   ▼                   ▼
-┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-│ Client App 1 │    │ Client App 2 │    │ Client App N │
-│(client-1.test)│   │(client-2.test)│   │(client-n.test)│
-└──────────────┘    └──────────────┘    └──────────────┘
+GET /oauth/authorize
+    ?client_id={CLIENT_ID}
+    &redirect_uri={REDIRECT_URI}
+    &response_type=code
+    &state={STATE}
 ```
 
----
+### Token Endpoint
 
-## 🔄 Alur Login SSO (Simplified)
-
-```
-1. User → Client App (belum login)
-2. Client → Redirect ke SSO Server (/oauth/authorize)
-3. User → Login di SSO Server
-4. User → Approve authorization
-5. SSO Server → Redirect ke Client dengan authorization code
-6. Client → Exchange code ke access token (/oauth/token)
-7. Client → Get user info (/api/user)
-8. Client → Create local session → User logged in ✅
-```
-
-**📖 Detail lengkap:** [Complete Integration Guide](docs/SSO_COMPLETE_GUIDE.md#alur-login-sso-authorization-code-flow)
-
----
-
----
-
-## 🔌 Integrasi dengan Client App
-
-### Endpoint OAuth2
-
-#### **Authorization Endpoint**
-```
-GET /oauth/authorize?client_id={ID}&redirect_uri={URI}&response_type=code&state={STATE}
-```
-Client redirect user ke endpoint ini untuk memulai flow login.
-
-#### **Token Endpoint**
-```
+```http
 POST /oauth/token
 Content-Type: application/x-www-form-urlencoded
 
-grant_type=authorization_code&
-client_id={ID}&
-client_secret={SECRET}&
-redirect_uri={URI}&
+grant_type=authorization_code
+client_id={CLIENT_ID}
+client_secret={CLIENT_SECRET}
+redirect_uri={REDIRECT_URI}
 code={AUTHORIZATION_CODE}
 ```
-Client menukar authorization code menjadi access token.
 
-### Endpoint API
+### User Info
 
-#### **Get User Info**
-```
+```http
 GET /api/user
 Authorization: Bearer {ACCESS_TOKEN}
 Accept: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "id": 1,
@@ -319,40 +187,56 @@ Accept: application/json
 }
 ```
 
-#### **Logout**
-```
-POST /api/logout
-Authorization: Bearer {ACCESS_TOKEN}
-```
-Logout session web di SSO Server (token tetap valid).
+### Session & Token Management
 
-#### **Revoke Token**
-```
-POST /api/revoke-token
-Authorization: Bearer {ACCESS_TOKEN}
-```
-Revoke token OAuth (session tetap aktif).
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/logout` | POST | Invalidate web session (token remains valid) |
+| `/api/revoke-token` | POST | Revoke OAuth token (session remains active) |
+| `/api/logout-all` | POST | Revoke all tokens and invalidate all sessions |
 
-#### **Logout All**
-```
-POST /api/logout-all
-Authorization: Bearer {ACCESS_TOKEN}
-```
-Revoke semua token + logout semua session.
-
-**📖 Detail lengkap:** [Complete Integration Guide](docs/SSO_COMPLETE_GUIDE.md#referensi-api)
+All endpoints require `Authorization: Bearer {ACCESS_TOKEN}`.
 
 ---
 
-## 🛠️ Setup OAuth Client
+## Database Schema
 
-### Step 1: Buat OAuth Client
+| Table | Description |
+|-------|-------------|
+| `users` | Core user records |
+| `user_admin_infos` | Extended admin profiles (phone, address, avatar) |
+| `roles` | Available roles |
+| `role_user` | Pivot — user to role (many-to-many) |
+| `access_areas` | Named application access groups |
+| `access_area_user` | Pivot — user to access area (many-to-many) |
+| `oauth_clients` | Registered OAuth clients |
+| `oauth_access_tokens` | Issued access tokens |
+| `oauth_refresh_tokens` | Issued refresh tokens |
+| `sessions` | Web sessions (database driver) |
+
+---
+
+## Default Credentials
+
+> **Warning:** Change all passwords before deploying to production.
+
+| User | Email | Password | Roles | Access Areas |
+|------|-------|----------|-------|--------------|
+| Super Admin | `admin@sso.test` | `password` | `super_admin`, `admin` | supervisor, portal, reporting |
+| Portal Admin | `admin.portal@sso.test` | `password` | `admin` | portal, reporting |
+| Portal Editor | `editor.portal@sso.test` | `password` | `editor` | portal |
+
+Seeders are idempotent — safe to run multiple times without duplicating data.
+
+---
+
+## Registering an OAuth Client
 
 ```bash
 php artisan passport:client
 ```
 
-**Pertanyaan yang muncul:**
+Interactive prompts:
 
 ```
 Which user ID should the client be assigned to?
@@ -371,234 +255,133 @@ Which type of client would you like to create?
 > 0
 ```
 
-**Pilih `0` untuk Authorization Code Grant (SSO).**
+Output:
 
-**Output:**
 ```
-New client created successfully.
-Client ID: 019c748a-de9f-71dc-b3d6-f4b476023341
-Client secret: GLaFWG6NUFnx9f8w4JIeT1eXK7Y54LESrKlCsPbe
+Client ID:     019c748a-de9f-71dc-b3d6-f4b476023341
+Client Secret: GLaFWG6NUFnx9f8w4JIeT1eXK7Y54LESrKlCsPbe
 ```
 
-**Simpan Client ID dan Secret dengan aman!**
+Store the client secret securely. It cannot be retrieved after this point.
 
-### Step 2: Update Redirect URI (jika perlu)
+To update a client's redirect URI later:
 
 ```bash
 php artisan sso:set-callback-url "http://client-1.test/auth/callback"
 ```
 
-**📖 Detail lengkap:** [Setup Checklist](docs/SETUP_CHECKLIST.md)
-
 ---
 
-## 🎨 Fitur Utama
+## Testing
 
-### ✅ Autentikasi & OAuth2
+**Manual flow test:**
 
-- ✅ **Login/Logout** dengan UI elegan (Laravel Breeze)
-- ✅ **OAuth2 Authorization Code Flow** (Laravel Passport)
-- ✅ **Token Management** (access token, refresh token)
-- ✅ **Session Management** (database sessions)
+1. Visit your client application
+2. Trigger "Login via SSO"
+3. Authenticate at the SSO Server
+4. Approve the authorization request
+5. Confirm the user is authenticated in the client
 
-### 👥 User & Role Management
-
-- ✅ **Role System** (many-to-many dengan user)
-- ✅ **Access Area Control** (menentukan aplikasi yang boleh diakses)
-- ✅ **User Profile** (admin info: phone, address, avatar)
-
-### 🔒 Security Features
-
-- ✅ **HTTPS Ready** (wajib di production)
-- ✅ **Token Expiry** (30 menit access token, 7 hari refresh token)
-- ✅ **Redirect URI Validation** (harus match dengan yang terdaftar)
-- ✅ **CSRF Protection** (state parameter)
-- ✅ **Rate Limiting** (throttle middleware)
-
-### 📊 API Endpoints
-
-- ✅ `GET /api/user` - Get user info dengan roles & access areas
-- ✅ `POST /api/logout` - Logout session (token tetap valid)
-- ✅ `POST /api/revoke-token` - Revoke token (session tetap aktif)
-- ✅ `POST /api/logout-all` - Logout lengkap (revoke semua + logout semua)
-
----
-
-## 📖 Dokumentasi Lengkap
-
-### Untuk Developer Baru
-
-1. **Mulai dari sini:** [Setup Checklist](docs/SETUP_CHECKLIST.md)
-2. **Pelajari alur:** [Complete Integration Guide](docs/SSO_COMPLETE_GUIDE.md)
-3. **Quick reference:** [Quick Reference Guide](docs/QUICK_REFERENCE.md)
-
-### Untuk Integrasi Client
-
-1. **Setup client:** [Complete Integration Guide - Client Setup](docs/SSO_COMPLETE_GUIDE.md#setup-client-app)
-2. **Implement logout:** [Client Logout Guide](docs/CLIENT_LOGOUT_GUIDE.md)
-3. **Rancangan client:** [Client System Design](README_CLIENTS.md)
-
----
-
-## 🧪 Testing
-
-### Test Login Flow
+**cURL examples:**
 
 ```bash
-# 1. Buka client app
-http://client-1.test
-
-# 2. Klik "Login via SSO"
-# 3. Login di SSO Server
-# 4. Approve authorization
-# 5. Verify: User sudah login di client
-```
-
-### Test API dengan cURL
-
-```bash
-# Get user info
+# Retrieve user info
 curl -X GET http://127.0.0.1:8000/api/user \
   -H "Authorization: Bearer {ACCESS_TOKEN}" \
   -H "Accept: application/json"
 
-# Logout
+# Logout session
 curl -X POST http://127.0.0.1:8000/api/logout \
   -H "Authorization: Bearer {ACCESS_TOKEN}" \
   -H "Accept: application/json"
 ```
 
-**📖 Detail lengkap:** [Complete Integration Guide - Testing](docs/SSO_COMPLETE_GUIDE.md#testing-end-to-end)
-
 ---
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
-### Common Issues
-
-**Problem:** "Invalid redirect URI"  
-**Solution:** Update redirect URI dengan command:
+**`Invalid redirect URI`**
+The redirect URI in the request does not match what is registered for the client. Update it with:
 ```bash
 php artisan sso:set-callback-url "http://client-1.test/auth/callback"
 ```
 
-**Problem:** "Client authentication failed"  
-**Solution:** Cek `.env` client: `SSO_CLIENT_ID` dan `SSO_CLIENT_SECRET` sudah benar
+**`Client authentication failed`**
+Verify that `SSO_CLIENT_ID` and `SSO_CLIENT_SECRET` in the client application's `.env` match the values issued during client registration.
 
-**Problem:** "Connection refused" saat callback  
-**Solution:** Pastikan client app running dan redirect URI sesuai domain client
-
-**📖 Detail lengkap:** [Complete Integration Guide - Troubleshooting](docs/SSO_COMPLETE_GUIDE.md#troubleshooting)
+**`Connection refused` on callback**
+Confirm the client application is running and the redirect URI matches the client's domain exactly.
 
 ---
 
-## 🏗️ Struktur Database
+## Production Deployment
 
-### Tabel Utama
+**Environment:**
+- Set `APP_ENV=production` and `APP_DEBUG=false`
+- Set `APP_URL` to your production domain
+- Ensure all environment variables are configured on the server
 
-- **`users`** - Data user (id, name, email, password)
-- **`user_admin_infos`** - Profil admin (phone, address, avatar)
-- **`roles`** - Role system (super_admin, admin, editor)
-- **`role_user`** - Pivot user-role (many-to-many)
-- **`access_areas`** - Access area (supervisor, portal, reporting)
-- **`access_area_user`** - Pivot user-access_area (many-to-many)
-- **`oauth_clients`** - OAuth clients (client_id, secret, redirect_uri)
-- **`oauth_access_tokens`** - Access tokens
-- **`oauth_refresh_tokens`** - Refresh tokens
-- **`sessions`** - Web sessions
+**Database:**
+```bash
+php artisan migrate --force
+```
 
-**📖 Detail lengkap:** [Complete Integration Guide](docs/SSO_COMPLETE_GUIDE.md#struktur-database)
+**Passport:**
+```bash
+php artisan passport:keys
+```
 
----
+**Checklist:**
 
-## 🔐 Default Credentials (Development)
-
-**Super Admin:**
-- Email: `admin@sso.test`
-- Password: `password`
-- Roles: `super_admin`, `admin`
-- Access Areas: `supervisor`, `portal`, `reporting`
-
-**Portal Admin:**
-- Email: `admin.portal@sso.test`
-- Password: `password`
-- Roles: `admin`
-- Access Areas: `portal`, `reporting`
-
-**Portal Editor:**
-- Email: `editor.portal@sso.test`
-- Password: `password`
-- Roles: `editor`
-- Access Areas: `portal`
-
-**⚠️ PENTING:** Ganti password di production!
+- [ ] HTTPS/SSL certificate installed and enforced
+- [ ] Production environment variables configured
+- [ ] Database migrations run
+- [ ] Passport keys generated
+- [ ] All default passwords changed
+- [ ] Rate limiting verified
+- [ ] Logging and error monitoring configured
+- [ ] Client secrets rotated from development values
 
 ---
 
-## 🚀 Production Deployment
+## Documentation
 
-### Checklist Production
-
-- [ ] **Setup HTTPS** (SSL certificate)
-- [ ] **Update APP_URL** ke domain production
-- [ ] **Set APP_ENV=production** dan **APP_DEBUG=false**
-- [ ] **Setup environment variables** di server
-- [ ] **Run migrations** (`php artisan migrate --force`)
-- [ ] **Install Passport keys** (`php artisan passport:keys`)
-- [ ] **Setup queue** untuk background jobs (opsional)
-- [ ] **Setup monitoring** (logs, errors)
-
-### Security Best Practices
-
-- ✅ **Gunakan HTTPS** (wajib!)
-- ✅ **Set strong passwords** untuk semua user
-- ✅ **Rotate client secrets** secara berkala
-- ✅ **Monitor token usage** (audit logs)
-- ✅ **Setup rate limiting** untuk API endpoints
-- ✅ **Keep dependencies updated** (`composer update`)
+| Document | Description |
+|----------|-------------|
+| [Complete Integration Guide](docs/SSO_COMPLETE_GUIDE.md) | Full SSO flow, server & client setup, testing, troubleshooting |
+| [Setup Checklist](docs/SETUP_CHECKLIST.md) | Step-by-step checklist from zero to production-ready |
+| [Quick Reference](docs/QUICK_REFERENCE.md) | Command cheat sheet, common workflows, default credentials |
+| [Terminal Commands Guide](docs/TERMINAL_COMMANDS_GUIDE.md) | All terminal commands with interactive prompts documented |
+| [Client Logout Guide](docs/CLIENT_LOGOUT_GUIDE.md) | Logout implementation for client applications |
+| [Client Example Code](docs/CLIENT_EXAMPLE_CODE.md) | Reference implementations for Laravel and SPA clients |
+| [Client System Design](README_CLIENTS.md) | Architecture and design of integrated client applications |
 
 ---
 
-## 📚 Resources & Links
+## Tech Stack
 
-- **Laravel Documentation:** https://laravel.com/docs
-- **Laravel Passport:** https://laravel.com/docs/passport
-- **OAuth2 Specification:** https://oauth.net/2/
-- **Authorization Code Flow:** https://oauth.net/2/grant-types/authorization-code/
-
----
-
-## 🤝 Contributing
-
-Kontribusi sangat diterima! Silakan:
-
-1. Fork repository
-2. Create feature branch
-3. Commit changes
-4. Push to branch
-5. Create Pull Request
+- **Framework:** Laravel 12.x
+- **OAuth2:** Laravel Passport
+- **Auth UI:** Laravel Breeze (Blade)
+- **Database:** MySQL / MariaDB
+- **Language:** PHP 8.2+
 
 ---
 
-## 📄 License
+## Contributing
 
-Proyek ini dibangun di atas **Laravel** dan mengikuti lisensi **MIT**.
-
----
-
-## 🙏 Credits
-
-- **Laravel Framework** - https://laravel.com
-- **Laravel Passport** - OAuth2 server implementation
-- **Laravel Breeze** - Authentication scaffolding
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes with clear messages
+4. Push to your branch
+5. Open a Pull Request
 
 ---
 
-<div align="center">
+## License
 
-**Dibuat dengan ❤️ menggunakan Laravel & Passport**
+This project is open-sourced under the [MIT License](LICENSE).
 
-[📖 Dokumentasi Lengkap](docs/SSO_COMPLETE_GUIDE.md) • [✅ Setup Checklist](docs/SETUP_CHECKLIST.md) • [⚡ Quick Reference](docs/QUICK_REFERENCE.md)
+---
 
-</div>
-
+*Built with Laravel & Passport.*
