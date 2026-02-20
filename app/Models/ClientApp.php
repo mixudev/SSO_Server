@@ -17,6 +17,7 @@ class ClientApp extends Model
         'description',
         'access_area_id',
         'is_active',
+        'oauth_client_id',
     ];
 
     protected $casts = [
@@ -26,6 +27,16 @@ class ClientApp extends Model
     public function accessArea()
     {
         return $this->belongsTo(AccessArea::class);
+    }
+
+    public function passportClient()
+    {
+        return $this->belongsTo(\Laravel\Passport\Client::class, 'oauth_client_id', 'id');
+    }
+
+    public function hasPassportClient(): bool
+    {
+        return !empty($this->oauth_client_id);
     }
 }
 

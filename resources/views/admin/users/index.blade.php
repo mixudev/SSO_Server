@@ -2,11 +2,11 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 shadow-md shadow-indigo-200 dark:shadow-indigo-900/40">
+                <!-- <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 shadow-md shadow-indigo-200 dark:shadow-indigo-900/40">
                     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                     </svg>
-                </div>
+                </div> -->
                 <div>
                     <h2 class="font-bold text-xl text-gray-900 dark:text-white leading-tight tracking-tight">
                         Manajemen Pengguna & Role
@@ -234,7 +234,7 @@
 
                                                 @if (auth()->id() !== $user->id)
                                                     <button type="button"
-                                                        onclick="document.getElementById('delete-form-{{ $user->id }}').requestSubmit()"
+                                                        onclick="openModal('deleteUserModal{{ $user->id }}', '{{ route('admin.users.destroy', $user) }}')"
                                                         class="inline-flex items-center gap-1 rounded-lg bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 dark:hover:bg-red-600 hover:text-white dark:hover:text-white hover:border-red-600 transition-all duration-100 shadow-sm">
                                                         <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
@@ -252,15 +252,17 @@
                                         </td>
                                     </form>
 
-                                    {{-- Hidden delete form (outside the update form) --}}
+                                    {{-- Modal untuk delete user --}}
                                     @if (auth()->id() !== $user->id)
-                                        <td class="hidden">
-                                            <form id="delete-form-{{ $user->id }}" method="POST" action="{{ route('admin.users.destroy', $user) }}"
-                                                  onsubmit="return confirm('Hapus pengguna \'{{ addslashes($user->name) }}\'?\n\nSeluruh data role dan akses yang terkait akan ikut dihapus.')">
-                                                @csrf
-                                                @method('DELETE')
-                                            </form>
-                                        </td>
+                                        <x-confirm-modal
+                                            id="deleteUserModal{{ $user->id }}"
+                                            type="danger"
+                                            title="Hapus Pengguna"
+                                            :message="'Hapus pengguna \'' . $user->name . '\'?<br>Seluruh data role dan akses yang terkait akan ikut dihapus.'"
+                                            confirmText="Hapus Pengguna"
+                                            cancelText="Batal"
+                                            formMethod="DELETE"
+                                        />
                                     @endif
                                 </tr>
                             @empty

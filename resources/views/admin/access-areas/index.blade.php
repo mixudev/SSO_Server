@@ -2,11 +2,11 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 shadow-md shadow-teal-200 dark:shadow-teal-900/40">
+                <!-- <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 shadow-md shadow-teal-200 dark:shadow-teal-900/40">
                     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                     </svg>
-                </div>
+                </div> -->
                 <div>
                     <h2 class="font-bold text-xl text-gray-900 dark:text-white leading-tight tracking-tight">
                         Manajemen Access Areas
@@ -169,18 +169,14 @@
                                                     </svg>
                                                     Edit
                                                 </a>
-                                                <form method="POST" action="{{ route('admin.access-areas.destroy', $area) }}"
-                                                      onsubmit="return confirm('Hapus access area \'{{ addslashes($area->name) }}\'?\n\nSemua relasi dengan {{ $area->users_count }} user dan client apps akan ikut terhapus.')">
-                                                    @csrf
-                                                    @method('DELETE')
-                                                    <button type="submit"
-                                                            class="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 dark:hover:bg-red-600 hover:text-white dark:hover:text-white hover:border-red-600 transition-all duration-100 shadow-sm">
-                                                        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                                        </svg>
-                                                        Hapus
-                                                    </button>
-                                                </form>
+                                                <button type="button"
+                                                        onclick="openModal('deleteAreaModal{{ $area->id }}', '{{ route('admin.access-areas.destroy', $area) }}')"
+                                                        class="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 dark:hover:bg-red-600 hover:text-white dark:hover:text-white hover:border-red-600 transition-all duration-100 shadow-sm">
+                                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                                    </svg>
+                                                    Hapus
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -213,4 +209,17 @@
 
         </div>
     </div>
+
+    {{-- Modals untuk delete access area --}}
+    @foreach($areas as $area)
+        <x-confirm-modal
+            id="deleteAreaModal{{ $area->id }}"
+            type="danger"
+            title="Hapus Access Area"
+            :message="'Hapus access area \'' . $area->name . '\'?<br>Semua relasi dengan ' . $area->users_count . ' user dan client apps akan ikut terhapus.'"
+            confirmText="Hapus Access Area"
+            cancelText="Batal"
+            formMethod="DELETE"
+        />
+    @endforeach
 </x-app-layout>

@@ -2,11 +2,11 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 shadow-md shadow-violet-200 dark:shadow-violet-900/40">
+                <!-- <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 shadow-md shadow-violet-200 dark:shadow-violet-900/40">
                     <svg class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
                     </svg>
-                </div>
+                </div> -->
                 <div>
                     <h2 class="font-bold text-xl text-gray-900 dark:text-white leading-tight tracking-tight">
                         Manajemen Client Apps
@@ -36,6 +36,15 @@
                         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" />
                     </svg>
                     <p class="text-sm font-medium text-emerald-800 dark:text-emerald-200">{{ session('status') }}</p>
+                </div>
+            @endif
+
+            @if (session('error'))
+                <div class="flex items-start gap-3 rounded-xl bg-red-50 dark:bg-red-900/25 px-4 py-3 border border-red-200 dark:border-red-700/50 shadow-sm">
+                    <svg class="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600 dark:text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                    </svg>
+                    <p class="text-sm font-medium text-red-800 dark:text-red-200">{{ session('error') }}</p>
                 </div>
             @endif
 
@@ -181,6 +190,30 @@
                                 @endif
 
                                 <div class="flex items-center gap-2">
+                                    @auth
+                                        @if (auth()->user()->hasRole('super_admin'))
+                                            @if ($client->hasPassportClient())
+                                                <a href="{{ route('admin.clients.info', $client) }}"
+                                                   class="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-600 dark:hover:bg-blue-600 hover:text-white dark:hover:text-white hover:border-blue-600 transition-all duration-100 shadow-sm"
+                                                   title="Lihat informasi Passport Client">
+                                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                                                    </svg>
+                                                    Info
+                                                </a>
+                                            @else
+                                                <button type="button"
+                                                        onclick="openGenerateModal('{{ addslashes($client->name) }}', '{{ route('admin.clients.generate-passport', $client) }}', {{ $client->id }})"
+                                                        class="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600 dark:hover:bg-emerald-600 hover:text-white dark:hover:text-white hover:border-emerald-600 transition-all duration-100 shadow-sm"
+                                                        title="Generate Passport Client baru">
+                                                    <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                                    </svg>
+                                                    Add Client
+                                                </button>
+                                            @endif
+                                        @endif
+                                    @endauth
                                     <a href="{{ route('admin.clients.edit', $client) }}"
                                        class="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-100 shadow-sm">
                                         <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
@@ -188,18 +221,14 @@
                                         </svg>
                                         Edit
                                     </a>
-                                    <form method="POST" action="{{ route('admin.clients.destroy', $client) }}"
-                                          onsubmit="return confirm('Hapus client \'{{ addslashes($client->name) }}\'?\n\nKoneksi OAuth2 dari aplikasi ini akan terputus sepenuhnya.')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit"
-                                                class="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 dark:hover:bg-red-600 hover:text-white dark:hover:text-white hover:border-red-600 transition-all duration-100 shadow-sm">
-                                            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                            </svg>
-                                            Hapus
-                                        </button>
-                                    </form>
+                                    <button type="button"
+                                            onclick="openDeleteModal('{{ addslashes($client->name) }}', '{{ route('admin.clients.destroy', $client) }}', {{ $client->id }})"
+                                            class="inline-flex items-center gap-1 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/50 px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-600 dark:hover:bg-red-600 hover:text-white dark:hover:text-white hover:border-red-600 transition-all duration-100 shadow-sm">
+                                        <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                        </svg>
+                                        Hapus
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -221,4 +250,41 @@
 
         </div>
     </div>
+
+    {{-- Modals menggunakan komponen --}}
+    @foreach($clients as $client)
+        @if (!$client->hasPassportClient())
+            <x-confirm-modal
+                id="generateClientModal{{ $client->id }}"
+                type="success"
+                title="Generate Passport Client"
+                :message="'Anda akan membuat Passport Client baru untuk \'' . $client->name . '\'.<br>Client ID dan Secret akan dibuat dan harus disimpan dengan aman. Secret hanya ditampilkan sekali saat pertama kali dibuat.'"
+                confirmText="Generate Client"
+                cancelText="Batal"
+                formMethod="POST"
+            />
+        @endif
+        
+        <x-confirm-modal
+            id="deleteClientModal{{ $client->id }}"
+            type="danger"
+            title="Hapus Client App"
+            :message="'Anda akan menghapus client app \'' . $client->name . '\'.<br>Koneksi OAuth2 dari aplikasi ini akan terputus sepenuhnya. Tindakan ini tidak dapat dibatalkan.'"
+            confirmText="Hapus Client"
+            cancelText="Batal"
+            formMethod="DELETE"
+        />
+    @endforeach
+
+    <script>
+        // Generate Modal Functions
+        function openGenerateModal(clientName, formAction, clientId) {
+            openModal('generateClientModal' + clientId, formAction);
+        }
+
+        // Delete Modal Functions
+        function openDeleteModal(clientName, formAction, clientId) {
+            openModal('deleteClientModal' + clientId, formAction);
+        }
+    </script>
 </x-app-layout>

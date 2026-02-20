@@ -17,12 +17,12 @@
 }
 .pf-input {
     display: block; width: 100%;
-    border: 1.5px solid #e5e7eb;
+    border: 1.5px solidrgba(229, 231, 235, 0.56);
     border-radius: 9px;
     padding: 9px 12px 9px 36px;
     font-size: 0.875rem;
-    color: #111827;
-    /* background: white; */
+    color:rgb(156, 156, 156);
+    background: none;
     transition: border-color 0.15s, box-shadow 0.15s;
     outline: none;
 }

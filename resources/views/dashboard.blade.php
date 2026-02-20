@@ -56,7 +56,7 @@
         .profile-card {
             /* background: white; */
             border-radius: 16px;
-            border: 1px solid rgba(0,0,0,0.07);
+            border: 1px solid rgba(148, 147, 147, 0.31);
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
             overflow: hidden;
         }
@@ -149,7 +149,7 @@
         .portals-panel {
             /* background: white; */
             border-radius: 16px;
-            border: 1px solid rgba(0,0,0,0.07);
+            border: 1px solid rgba(148, 147, 147, 0.31);
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .dark .portals-panel { background: rgb(31,41,55); border-color: rgba(255,255,255,0.08); }

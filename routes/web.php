@@ -55,6 +55,10 @@ Route::middleware(['auth', 'verified', 'admin'])
         Route::get('/clients/{client}/edit', [AdminClientController::class, 'edit'])->name('clients.edit');
         Route::put('/clients/{client}', [AdminClientController::class, 'update'])->name('clients.update');
         Route::delete('/clients/{client}', [AdminClientController::class, 'destroy'])->name('clients.destroy');
+        Route::post('/clients/{client}/generate-passport', [AdminClientController::class, 'generatePassportClient'])->name('clients.generate-passport');
+        Route::get('/clients/{client}/info', [AdminClientController::class, 'infoPassportClient'])->name('clients.info');
+        Route::delete('/clients/{client}/delete-passport', [AdminClientController::class, 'deletePassportClient'])->name('clients.delete-passport');
+        Route::post('/clients/clear-secret-session', [AdminClientController::class, 'clearSecretSession'])->name('clients.clear-secret-session');
 
         Route::get('/logs', [AdminActivityLogController::class, 'index'])->name('logs.index');
     });
