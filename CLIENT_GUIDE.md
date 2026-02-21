@@ -1,97 +1,341 @@
 # MixuAuth SSO — Client Integration Guide
 
-Panduan lengkap untuk mengintegrasikan aplikasi Laravel sebagai **client** dari MixuAuth SSO Server.
+Panduan lengkap untuk mengintegrasikan aplikasi Laravel sebagai **client** dari MixuAuth SSO Server. Berdasarkan project referensi yang sudah berjalan.
 
 ---
 
 ## Daftar Isi
 
 - [Prasyarat](#prasyarat)
-- [Konfigurasi Environment](#konfigurasi-environment)
-- [Routes](#routes)
-- [Controllers](#controllers)
-- [Middleware](#middleware)
-- [Global Logout (Webhook)](#global-logout-webhook)
-- [Alur Lengkap](#alur-lengkap)
-- [Troubleshooting](#troubleshooting)
+- [Langkah 1: Persiapan Project](#langkah-1-persiapan-project)
+- [Langkah 2: Konfigurasi Environment](#langkah-2-konfigurasi-environment)
+- [Langkah 3: Konfigurasi Services](#langkah-3-konfigurasi-services)
+- [Langkah 4: Service SSO Auth](#langkah-4-service-sso-auth)
+- [Langkah 5: Controller Auth](#langkah-5-controller-auth)
+- [Langkah 6: Controller Logout Callback (Global Logout)](#langkah-6-controller-logout-callback-global-logout)
+- [Langkah 7: Middleware](#langkah-7-middleware)
+- [Langkah 8: Bootstrap & Routes](#langkah-8-bootstrap--routes)
+- [Langkah 9: View SSO Not Configured](#langkah-9-view-sso-not-configured)
+- [Langkah 10: Migrasi & Session](#langkah-10-migrasi--session)
+- [Alur Login & Troubleshooting](#alur-login--troubleshooting)
+- [Checklist Integrasi](#checklist-integrasi)
+
+---
+
+## Ringkasan File yang Dibuat/Edit
+
+| File | Aksi |
+|------|------|
+| `.env` | Edit — tambah AUTH_*, SSO_WEBHOOK_SECRET, SESSION_* |
+| `config/services.php` | Edit — tambah array `mixuauth` |
+| `app/Services/SSOAuthService.php` | Buat baru |
+| `app/Http/Controllers/Auth/AuthController.php` | Buat baru |
+| `app/Http/Controllers/SsoLogoutCallbackController.php` | Buat baru |
+| `app/Http/Middleware/EnsureSSOAuthenticated.php` | Buat baru |
+| `app/Http/Middleware/EnsureSSOSessionAlive.php` | Buat baru |
+| `app/Http/Middleware/CheckRole.php` | Buat baru |
+| `app/Http/Middleware/CheckAccessArea.php` | Buat baru |
+| `bootstrap/app.php` | Edit — tambah alias middleware |
+| `routes/web.php` | Edit — tambah routes auth & protected |
+| `resources/views/auth/sso-not-configured.blade.php` | Buat baru |
 
 ---
 
 ## Prasyarat
 
-Sebelum mulai, pastikan kamu sudah memiliki:
-
+- Laravel 11+ atau 12
+- `HomeController` dengan route `home` (bisa buat baru atau pakai yang default)
+- `DashboardController` atau controller lain untuk halaman setelah login
 - Akses ke SSO Server (MixuAuth)
-- **Client ID** dan **Client Secret** (didapat dari admin SSO atau halaman Info Client)
-- **Redirect URI** yang sudah didaftarkan di SSO Server (contoh: `https://app.example.com/auth/callback`)
-- Opsional: **Webhook Secret** jika menggunakan fitur Global Logout
+- **Client ID** dan **Client Secret** (dari admin SSO / halaman Info Client)
+- **Redirect URI** terdaftar di SSO Server (default: `{APP_URL}/auth/callback`)
+- Opsional: **Webhook Secret** untuk Global Logout (dari halaman Info Client, setelah Aktifkan Global Logout)
 
 ---
 
-## Konfigurasi Environment
+## Langkah 1: Persiapan Project
 
-### 1. Tambah variabel ke `.env`
+1. Buat project Laravel baru atau gunakan yang sudah ada:
+   ```bash
+   composer create-project laravel/laravel client-app
+   cd client-app
+   ```
+
+2. Pastikan database sudah dikonfigurasi di `.env`.
+
+---
+
+## Langkah 2: Konfigurasi Environment
+
+Buka `.env` dan tambahkan (atau edit) variabel berikut:
 
 ```env
-# SSO Credentials
-SSO_BASE_URL=https://sso.example.com
-SSO_CLIENT_ID=your-client-id
-SSO_CLIENT_SECRET=your-client-secret
-SSO_REDIRECT_URI=https://app.example.com/auth/callback
-SSO_SCOPE=
+# URL aplikasi client (wajib benar, dipakai untuk redirect)
+APP_URL=http://client-1.test
 
-# Global Logout (opsional)
-SSO_WEBHOOK_SECRET=your-webhook-secret
+# Session: wajib database untuk Global Logout
+SESSION_DRIVER=database
+SESSION_LIFETIME=120
+SESSION_ENCRYPT=true
+
+# MixuAuth SSO — sesuaikan dengan SSO Server
+AUTH_BASE_URL=http://127.0.0.1:8000
+AUTH_CLIENT_ID=your-client-id-dari-sso
+AUTH_CLIENT_SECRET=your-client-secret-dari-sso
+
+# Kosongkan = otomatis pakai APP_URL + /auth/callback
+AUTH_REDIRECT_URI=
+AUTH_SCOPES=
+
+# Global Logout (opsional) — dari halaman Info Client di SSO Server
+SSO_WEBHOOK_SECRET=
 ```
 
-### 2. Buat atau update `config/services.php`
+> **Penting:**  
+> - `AUTH_REDIRECT_URI` kosong = otomatis `APP_URL/auth/callback`  
+> - Redirect URI di SSO Server harus sama persis (termasuk http/https, trailing slash)
+
+---
+
+## Langkah 3: Konfigurasi Services
+
+Edit `config/services.php`. Tambahkan array `mixuauth`:
 
 ```php
-'sso' => [
-    'base_url'       => env('SSO_BASE_URL'),
-    'client_id'      => env('SSO_CLIENT_ID'),
-    'client_secret'  => env('SSO_CLIENT_SECRET'),
-    'redirect_uri'   => env('SSO_REDIRECT_URI'),
-    'scope'          => env('SSO_SCOPE', ''),
-    'webhook_secret' => env('SSO_WEBHOOK_SECRET'),
+/*
+|--------------------------------------------------------------------------
+| MixuAuth SSO (Auth Server / Identity Provider)
+|--------------------------------------------------------------------------
+*/
+'mixuauth' => [
+    'base_url' => rtrim(env('AUTH_BASE_URL', 'https://auth.example.com'), '/'),
+    'client_id' => env('AUTH_CLIENT_ID'),
+    'client_secret' => env('AUTH_CLIENT_SECRET'),
+    'redirect_uri' => env('AUTH_REDIRECT_URI') ?: (rtrim(env('APP_URL', 'http://localhost'), '/') . '/auth/callback'),
+    'scopes' => env('AUTH_SCOPES', ''),
+    'authorize_url' => '/oauth/authorize',
+    'token_url' => '/oauth/token',
+    'user_url' => '/api/user',
+    'revoke_url' => '/oauth/revoke',
+    'webhook_secret' => env('SSO_WEBHOOK_SECRET'), // untuk Global Logout
 ],
 ```
 
 ---
 
-## Routes
+## Langkah 4: Service SSO Auth
 
-Tambahkan routes berikut di `routes/web.php`:
+Buat file `app/Services/SSOAuthService.php`:
 
 ```php
-use App\Http\Controllers\Auth\SsoAuthController;
-use App\Http\Controllers\Auth\SsoLogoutCallbackController;
-use App\Http\Controllers\Auth\LogoutController;
+<?php
 
-// SSO Login Flow
-Route::get('/auth/sso', [SsoAuthController::class, 'redirect'])->name('sso.redirect');
-Route::get('/auth/callback', [SsoAuthController::class, 'callback'])->name('sso.callback');
+namespace App\Services;
 
-// Logout
-Route::post('/logout', [LogoutController::class, 'logout'])
-    ->middleware('auth')
-    ->name('logout');
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
-// Global Logout Webhook (exclude CSRF — diverifikasi via HMAC signature)
-Route::post('/auth/sso/logout-callback', [SsoLogoutCallbackController::class, 'handle'])
-    ->name('sso.logout-callback')
-    ->withoutMiddleware(\App\Http\Middleware\VerifyCsrfToken::class);
+class SSOAuthService
+{
+    protected array $config;
+    protected array $lastError = [];
+
+    public function __construct()
+    {
+        $this->config = config('services.mixuauth', []);
+    }
+
+    public function getLastError(): array
+    {
+        return $this->lastError;
+    }
+
+    public function clearLastError(): void
+    {
+        $this->lastError = [];
+    }
+
+    protected function setLastError(string $step, string $message, ?string $url = null, ?int $status = null, ?string $body = null, ?string $suggestion = null): void
+    {
+        $this->lastError = [
+            'step' => $step,
+            'message' => $message,
+            'url' => $url,
+            'status' => $status,
+            'body' => $body !== null ? Str::limit($body, 1000) : null,
+            'suggestion' => $suggestion,
+            'at' => now()->toIso8601String(),
+        ];
+        Log::warning('SSO error: ' . $step, $this->lastError);
+    }
+
+    public function getAuthorizeUrl(string $state): string
+    {
+        $base = rtrim($this->config['base_url'], '/');
+        $params = http_build_query([
+            'response_type' => 'code',
+            'client_id' => $this->config['client_id'],
+            'redirect_uri' => $this->config['redirect_uri'],
+            'scope' => $this->config['scopes'],
+            'state' => $state,
+        ]);
+        return $base . $this->config['authorize_url'] . '?' . $params;
+    }
+
+    public function generateState(): string
+    {
+        return Str::random(40);
+    }
+
+    public function exchangeCodeForToken(string $code): ?array
+    {
+        $this->clearLastError();
+        $base = rtrim($this->config['base_url'], '/');
+        $url = $base . $this->config['token_url'];
+
+        $response = Http::asForm()
+            ->timeout(15)
+            ->post($url, [
+                'grant_type' => 'authorization_code',
+                'client_id' => $this->config['client_id'],
+                'client_secret' => $this->config['client_secret'],
+                'redirect_uri' => $this->config['redirect_uri'],
+                'code' => $code,
+            ]);
+
+        if (! $response->successful()) {
+            $this->setLastError(
+                'token_exchange',
+                'Tukar authorization code ke access token gagal.',
+                $url,
+                $response->status(),
+                $response->body(),
+                'Cek AUTH_BASE_URL, Redirect URI di SSO, Client ID/Secret.'
+            );
+            return null;
+        }
+
+        $data = $response->json();
+        if (empty($data['access_token'])) {
+            $this->setLastError('token_exchange', 'Response tidak berisi access_token.', $url, $response->status(), $response->body(), null);
+            return null;
+        }
+
+        return [
+            'access_token' => $data['access_token'],
+            'refresh_token' => $data['refresh_token'] ?? null,
+            'expires_in' => (int) ($data['expires_in'] ?? 1800),
+        ];
+    }
+
+    public function getUser(string $accessToken): ?array
+    {
+        $this->clearLastError();
+        $base = rtrim($this->config['base_url'], '/');
+        $url = $base . $this->config['user_url'];
+
+        $response = Http::withToken($accessToken)
+            ->timeout(10)
+            ->acceptJson()
+            ->get($url);
+
+        if (! $response->successful()) {
+            $this->setLastError('get_user', 'Request GET /api/user gagal.', $url, $response->status(), $response->body(), null);
+            return null;
+        }
+
+        $data = $response->json();
+        if (! is_array($data)) {
+            $this->setLastError('get_user', 'Response bukan JSON array.', $url, null, null, null);
+            return null;
+        }
+        if (isset($data['data']) && is_array($data['data'])) {
+            $data = $data['data'];
+        }
+        if (isset($data['user']) && is_array($data['user'])) {
+            $data = $data['user'];
+        }
+
+        $id = (int) ($data['id'] ?? 0);
+        if ($id === 0) {
+            $this->setLastError('get_user', 'Response tidak berisi id.', $url, null, json_encode($data), null);
+            return null;
+        }
+
+        return [
+            'id' => $id,
+            'name' => $data['name'] ?? '',
+            'email' => $data['email'] ?? '',
+            'roles' => $this->normalizeList($data['roles'] ?? []),
+            'access_areas' => $this->normalizeList($data['access_areas'] ?? []),
+        ];
+    }
+
+    private function normalizeList(array $list): array
+    {
+        $out = [];
+        foreach ($list as $item) {
+            if (is_string($item)) {
+                $out[] = $item;
+            } elseif (is_array($item)) {
+                $out[] = $item['name'] ?? $item['slug'] ?? (string) ($item['id'] ?? '');
+            }
+        }
+        return array_values(array_filter($out));
+    }
+
+    public function logout(string $accessToken): ?array
+    {
+        if (empty($accessToken)) {
+            return null;
+        }
+        $base = rtrim($this->config['base_url'], '/');
+        $url = $base . '/api/logout';
+        try {
+            $response = Http::withToken($accessToken)->acceptJson()->timeout(10)->post($url);
+            if ($response->successful()) {
+                $data = $response->json();
+                if ($data['success'] ?? false) {
+                    return ['success' => true, 'message' => $data['message'] ?? 'OK', 'session_cleared' => $data['session_cleared'] ?? false];
+                }
+            }
+            return ['success' => false, 'message' => 'Failed', 'session_cleared' => false];
+        } catch (\Throwable $e) {
+            Log::error('SSO logout exception', ['error' => $e->getMessage(), 'url' => $url]);
+            return ['success' => false, 'message' => $e->getMessage(), 'session_cleared' => false];
+        }
+    }
+
+    public function isConfigured(): bool
+    {
+        return ! empty($this->config['base_url'])
+            && ! empty($this->config['client_id'])
+            && ! empty($this->config['client_secret'])
+            && ! empty($this->config['redirect_uri']);
+    }
+
+    public function isTokenValid(string $accessToken): bool
+    {
+        if (empty($accessToken)) {
+            return false;
+        }
+        $base = rtrim($this->config['base_url'], '/');
+        $url = $base . $this->config['user_url'];
+        try {
+            return Http::withToken($accessToken)->timeout(6)->acceptJson()->get($url)->successful();
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+}
 ```
-
-> **Catatan:** Route `/auth/sso/logout-callback` harus dikecualikan dari CSRF karena ini adalah webhook server-to-server. Keamanannya dijaga oleh verifikasi HMAC signature.
 
 ---
 
-## Controllers
+## Langkah 5: Controller Auth
 
-### `SsoAuthController`
-
-Buat file `app/Http/Controllers/Auth/SsoAuthController.php`:
+Buat file `app/Http/Controllers/Auth/AuthController.php`:
 
 ```php
 <?php
@@ -99,128 +343,107 @@ Buat file `app/Http/Controllers/Auth/SsoAuthController.php`:
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Services\SSOAuthService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
 
-class SsoAuthController extends Controller
+class AuthController extends Controller
 {
-    /**
-     * Redirect user ke SSO Server untuk login.
-     */
-    public function redirect(Request $request)
+    public function __construct(
+        protected SSOAuthService $sso
+    ) {}
+
+    public function redirect(Request $request): RedirectResponse|View
     {
-        $state = Str::random(40);
-        $request->session()->put('sso_state', $state);
+        if (! $this->sso->isConfigured()) {
+            Log::warning('SSO not configured. Set AUTH_BASE_URL, AUTH_CLIENT_ID, AUTH_CLIENT_SECRET.');
+            return view('auth.sso-not-configured');
+        }
 
-        $query = http_build_query([
-            'client_id'     => config('services.sso.client_id'),
-            'redirect_uri'  => config('services.sso.redirect_uri'),
-            'response_type' => 'code',
-            'scope'         => config('services.sso.scope'),
-            'state'         => $state,
-        ]);
+        $state = $this->sso->generateState();
+        $request->session()->put('oauth_state', $state);
+        $request->session()->put('oauth_intended_url', $request->query('intended', url()->previous()));
 
-        return redirect(config('services.sso.base_url') . '/oauth/authorize?' . $query);
+        return redirect()->away($this->sso->getAuthorizeUrl($state));
     }
 
-    /**
-     * Handle callback dari SSO Server, tukar code ke token, dan buat session lokal.
-     */
-    public function callback(Request $request)
+    public function callback(Request $request): RedirectResponse
     {
-        // Validasi state (CSRF protection)
-        if ($request->state !== $request->session()->pull('sso_state')) {
-            abort(403, 'Invalid state parameter.');
+        $this->sso->clearLastError();
+
+        $state = $request->session()->pull('oauth_state');
+        if (! $state || $state !== $request->query('state')) {
+            Log::warning('OAuth callback state mismatch.');
+            return redirect()->route('home')->with('error', __('Invalid session. Please try again.'));
         }
 
-        // Tukar authorization code ke access token
-        $response = Http::asForm()->post(config('services.sso.base_url') . '/oauth/token', [
-            'grant_type'    => 'authorization_code',
-            'client_id'     => config('services.sso.client_id'),
-            'client_secret' => config('services.sso.client_secret'),
-            'redirect_uri'  => config('services.sso.redirect_uri'),
-            'code'          => $request->code,
-        ]);
-
-        if ($response->failed()) {
-            return redirect('/')->with('error', 'Gagal mendapatkan token dari SSO.');
+        $code = $request->query('code');
+        if (! $code) {
+            return redirect()->route('home')->with('error', __('Login was cancelled or failed.'));
         }
 
-        $tokens = $response->json();
-
-        // Ambil data user dari SSO
-        $userResponse = Http::withToken($tokens['access_token'])
-            ->get(config('services.sso.base_url') . '/api/user');
-
-        if ($userResponse->failed()) {
-            return redirect('/')->with('error', 'Gagal mengambil data user dari SSO.');
+        $tokens = $this->sso->exchangeCodeForToken($code);
+        if (! $tokens) {
+            return redirect()->route('home')->with('error', __('Could not complete login.'));
         }
 
-        $ssoUser = $userResponse->json();
+        $user = $this->sso->getUser($tokens['access_token']);
+        if (! $user || empty($user['id'])) {
+            return redirect()->route('home')->with('error', __('Could not load profile.'));
+        }
 
-        // Simpan ke session lokal
-        $request->session()->put('sso_user', $ssoUser);
+        $request->session()->put('sso_user', $user);
         $request->session()->put('sso_access_token', $tokens['access_token']);
-        $request->session()->put('sso_refresh_token', $tokens['refresh_token'] ?? null);
+        $request->session()->put('sso_token_expires_at', now()->addSeconds($tokens['expires_in']));
+        if (! empty($tokens['refresh_token'])) {
+            $request->session()->put('sso_refresh_token', $tokens['refresh_token']);
+        }
+        $request->session()->regenerate();
 
-        // Opsional: sync user ke database lokal
-        // $localUser = User::updateOrCreate(
-        //     ['sso_user_id' => $ssoUser['id']],
-        //     ['name' => $ssoUser['name'], 'email' => $ssoUser['email']]
-        // );
-        // Auth::login($localUser);
-
-        return redirect()->intended('/dashboard');
+        $intended = $request->session()->pull('oauth_intended_url', route('dashboard'));
+        if ($intended && $intended !== route('login') && $intended !== url()->current()) {
+            return redirect()->to($intended);
+        }
+        return redirect()->intended(route('dashboard'));
     }
-}
-```
 
-### `LogoutController`
-
-Buat file `app/Http/Controllers/Auth/LogoutController.php`:
-
-```php
-<?php
-
-namespace App\Http\Controllers\Auth;
-
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-
-class LogoutController extends Controller
-{
-    public function logout(Request $request)
+    public function logout(Request $request): RedirectResponse
     {
-        $token = $request->session()->get('sso_access_token');
-
-        // Beritahu SSO Server untuk revoke token (opsional: gunakan /api/logout-all untuk global logout)
-        if ($token) {
-            Http::withToken($token)
-                ->post(config('services.sso.base_url') . '/api/logout');
+        $accessToken = $request->session()->get('sso_access_token');
+        if ($accessToken) {
+            $this->sso->logout($accessToken);
         }
 
-        // Hapus session lokal
-        $request->session()->flush();
+        $request->session()->forget([
+            'sso_user',
+            'sso_access_token',
+            'sso_refresh_token',
+            'sso_token_expires_at',
+        ]);
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
-        return redirect('/')->with('success', 'Berhasil logout.');
+        return redirect()->route('home')->with('status', 'Berhasil logout');
     }
 }
 ```
 
-### `SsoLogoutCallbackController` (Global Logout)
+---
 
-Buat file `app/Http/Controllers/Auth/SsoLogoutCallbackController.php`:
+## Langkah 6: Controller Logout Callback (Global Logout)
+
+Buat file `app/Http/Controllers/SsoLogoutCallbackController.php` (bukan di folder Auth):
 
 ```php
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -229,56 +452,95 @@ class SsoLogoutCallbackController extends Controller
     public function handle(Request $request): JsonResponse
     {
         $signature = $request->header('X-SSO-Signature');
-        $payload   = $request->getContent(); // Selalu gunakan raw body
+        $payload = $request->getContent();
 
-        if (!$signature || !$payload) {
-            Log::warning('SSO Webhook: missing signature or payload');
+        if (! $signature || ! $payload) {
+            Log::warning('Global logout webhook: missing signature or payload');
             return response()->json(['error' => 'Invalid request'], 400);
         }
 
-        $secret = config('services.sso.webhook_secret');
-        if (!$secret) {
-            Log::error('SSO Webhook: SSO_WEBHOOK_SECRET not configured');
+        $secret = config('services.mixuauth.webhook_secret');
+        if (! $secret) {
+            Log::warning('Global logout webhook: SSO_WEBHOOK_SECRET not configured');
             return response()->json(['error' => 'Not configured'], 500);
         }
 
-        // Verifikasi HMAC signature
         $expected = hash_hmac('sha256', $payload, $secret);
-        if (!hash_equals($expected, $signature)) {
-            Log::warning('SSO Webhook: invalid signature');
+        if (! hash_equals($expected, $signature)) {
+            Log::warning('Global logout webhook: invalid signature');
             return response()->json(['error' => 'Invalid signature'], 401);
         }
 
         $data = json_decode($payload, true);
-
         if (($data['event'] ?? '') !== 'global_logout') {
             return response()->json(['error' => 'Unknown event'], 400);
         }
 
-        // Hapus semua session untuk user ini
         $ssoUserId = $data['user_id'] ?? null;
-        $email     = $data['email'] ?? null;
-
-        $localUser = \App\Models\User::where('sso_user_id', $ssoUserId)
-            ->orWhere('email', $email)
-            ->first();
-
-        if ($localUser) {
-            DB::table('sessions')->where('user_id', $localUser->id)->delete();
+        $email = $data['email'] ?? null;
+        if (! $ssoUserId && ! $email) {
+            return response()->json(['error' => 'Invalid payload'], 400);
         }
+        $ssoUserId = $ssoUserId !== null ? (string) $ssoUserId : null;
 
+        $this->invalidateSessionsForUser($ssoUserId, $email);
         return response()->json(['success' => true]);
+    }
+
+    protected function invalidateSessionsForUser(?string $ssoUserId, ?string $email): void
+    {
+        $table = config('session.table', 'sessions');
+        $connection = config('session.connection') ?: config('database.default');
+        $encrypt = config('session.encrypt', false);
+        $sessions = DB::connection($connection)->table($table)->get();
+
+        foreach ($sessions as $session) {
+            try {
+                $payload = base64_decode((string) $session->payload, true);
+                if ($payload === false) {
+                    continue;
+                }
+                if ($encrypt) {
+                    $payload = Crypt::decrypt($payload);
+                }
+                $decoded = @unserialize($payload);
+                if (! is_array($decoded)) {
+                    continue;
+                }
+                $ssoUser = $decoded['sso_user'] ?? null;
+                if (! is_array($ssoUser)) {
+                    continue;
+                }
+                $sessionSsoId = isset($ssoUser['id']) ? (string) $ssoUser['id'] : null;
+                $sessionEmail = $ssoUser['email'] ?? null;
+                $match = false;
+                if ($ssoUserId && $sessionSsoId === $ssoUserId) {
+                    $match = true;
+                }
+                if ($email && $sessionEmail && strcasecmp($sessionEmail, $email) === 0) {
+                    $match = true;
+                }
+                if ($match) {
+                    DB::connection($connection)->table($table)->where('id', $session->id)->delete();
+                    Log::info('Global logout: invalidated session', ['session_id' => $session->id]);
+                }
+            } catch (\Throwable $e) {
+                Log::debug('Global logout: skip session', ['session_id' => $session->id ?? null, 'error' => $e->getMessage()]);
+            }
+        }
     }
 }
 ```
 
+> **Catatan:** Payload session di database Laravel disimpan base64. Harus `base64_decode` dulu sebelum decrypt & unserialize.
+
 ---
 
-## Middleware
+## Langkah 7: Middleware
 
-### `SsoAuthenticated` — Cek apakah user sudah login via SSO
+### 7a. `EnsureSSOAuthenticated`
 
-Buat file `app/Http/Middleware/SsoAuthenticated.php`:
+Buat `app/Http/Middleware/EnsureSSOAuthenticated.php`:
 
 ```php
 <?php
@@ -287,23 +549,64 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
-class SsoAuthenticated
+class EnsureSSOAuthenticated
 {
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next): Response
     {
-        if (!$request->session()->has('sso_user')) {
-            return redirect()->route('sso.redirect');
+        if (! $request->session()->has('sso_user')) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+            return redirect()->route('login')->with('intended', $request->url());
         }
-
         return $next($request);
     }
 }
 ```
 
-### `SsoHasRole` — Cek role user
+### 7b. `EnsureSSOSessionAlive`
 
-Buat file `app/Http/Middleware/SsoHasRole.php`:
+Buat `app/Http/Middleware/EnsureSSOSessionAlive.php`:
+
+```php
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Services\SSOAuthService;
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+class EnsureSSOSessionAlive
+{
+    public function __construct(protected SSOAuthService $sso) {}
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        $accessToken = $request->session()->get('sso_access_token');
+        if (empty($accessToken)) {
+            return $next($request);
+        }
+        if (! $this->sso->isTokenValid($accessToken)) {
+            $request->session()->forget(['sso_user', 'sso_access_token', 'sso_refresh_token', 'sso_token_expires_at']);
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'SSO session expired.'], 401);
+            }
+            return redirect()->route('login')->with('error', 'SSO session expired.');
+        }
+        return $next($request);
+    }
+}
+```
+
+### 7c. `CheckRole`
+
+Buat `app/Http/Middleware/CheckRole.php`:
 
 ```php
 <?php
@@ -312,28 +615,37 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
-class SsoHasRole
+class CheckRole
 {
-    public function handle(Request $request, Closure $next, string ...$roles)
+    public function handle(Request $request, Closure $next, string ...$roles): Response
     {
-        $user      = $request->session()->get('sso_user');
-        $userRoles = $user['roles'] ?? [];
-
-        foreach ($roles as $role) {
-            if (in_array($role, $userRoles)) {
-                return $next($request);
-            }
+        $user = $request->session()->get('sso_user');
+        if (! $user || empty($user['roles']) || ! is_array($user['roles'])) {
+            return $this->deny($request);
         }
+        $allowed = array_map('strtolower', $roles);
+        $userRoles = array_map('strtolower', $user['roles']);
+        if (count(array_intersect($allowed, $userRoles)) === 0) {
+            return $this->deny($request);
+        }
+        return $next($request);
+    }
 
-        abort(403, 'Akses ditolak: role tidak mencukupi.');
+    protected function deny(Request $request): Response
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+        return redirect()->route('forbidden')->with('message', __('You do not have permission.'));
     }
 }
 ```
 
-### `SsoHasAccessArea` — Cek access area user
+### 7d. `CheckAccessArea`
 
-Buat file `app/Http/Middleware/SsoHasAccessArea.php`:
+Buat `app/Http/Middleware/CheckAccessArea.php`:
 
 ```php
 <?php
@@ -342,213 +654,189 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
-class SsoHasAccessArea
+class CheckAccessArea
 {
-    public function handle(Request $request, Closure $next, string ...$areas)
+    public function handle(Request $request, Closure $next, string ...$areas): Response
     {
-        $user        = $request->session()->get('sso_user');
-        $userAreas   = $user['access_areas'] ?? [];
-
-        foreach ($areas as $area) {
-            if (in_array($area, $userAreas)) {
-                return $next($request);
-            }
+        $user = $request->session()->get('sso_user');
+        if (! $user || empty($user['access_areas']) || ! is_array($user['access_areas'])) {
+            return $this->deny($request);
         }
+        $allowed = array_map('strtolower', $areas);
+        $userAreas = array_map('strtolower', $user['access_areas']);
+        if (count(array_intersect($allowed, $userAreas)) === 0) {
+            return $this->deny($request);
+        }
+        return $next($request);
+    }
 
-        abort(403, 'Akses ditolak: access area tidak mencukupi.');
+    protected function deny(Request $request): Response
+    {
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Forbidden.'], 403);
+        }
+        return redirect()->route('forbidden')->with('message', __('You do not have access.'));
     }
 }
 ```
 
-### Registrasi Middleware
+---
 
-Di `bootstrap/app.php` (Laravel 11+):
+## Langkah 8: Bootstrap & Routes
+
+### 8a. Registrasi Middleware
+
+Edit `bootstrap/app.php`. Tambahkan alias di `withMiddleware`:
 
 ```php
-->withMiddleware(function (Middleware $middleware) {
+->withMiddleware(function (Middleware $middleware): void {
     $middleware->alias([
-        'sso.auth'        => \App\Http\Middleware\SsoAuthenticated::class,
-        'sso.role'        => \App\Http\Middleware\SsoHasRole::class,
-        'sso.access_area' => \App\Http\Middleware\SsoHasAccessArea::class,
+        'sso.auth' => \App\Http\Middleware\EnsureSSOAuthenticated::class,
+        'sso.alive' => \App\Http\Middleware\EnsureSSOSessionAlive::class,
+        'role' => \App\Http\Middleware\CheckRole::class,
+        'access_area' => \App\Http\Middleware\CheckAccessArea::class,
     ]);
 })
 ```
 
-Atau di `app/Http/Kernel.php` (Laravel 10 ke bawah):
+### 8b. Routes
+
+Edit `routes/web.php`. Pastikan ada route berikut (sesuaikan nama home/dashboard jika perlu):
 
 ```php
-protected $middlewareAliases = [
-    'sso.auth'        => \App\Http\Middleware\SsoAuthenticated::class,
-    'sso.role'        => \App\Http\Middleware\SsoHasRole::class,
-    'sso.access_area' => \App\Http\Middleware\SsoHasAccessArea::class,
-];
+<?php
+
+use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HomeController;
+use App\Http\Controllers\SsoLogoutCallbackController;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Support\Facades\Route;
+
+// Home — pastikan punya route 'home' (redirect ke dashboard jika sudah login)
+// Contoh HomeController::index: if (session()->has('sso_user')) return redirect()->route('dashboard');
+Route::get('/', [HomeController::class, 'index'])->name('home');
+
+// Global Logout webhook — HARUS sebelum route lain, exclude CSRF
+Route::post('/auth/sso/logout-callback', [SsoLogoutCallbackController::class, 'handle'])
+    ->name('sso.logout-callback')
+    ->withoutMiddleware([ValidateCsrfToken::class]);
+
+// Auth SSO
+Route::get('/login', [AuthController::class, 'redirect'])->name('login')->middleware('throttle:20,1');
+Route::get('/auth/callback', [AuthController::class, 'callback'])->name('auth.callback');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout')->middleware('throttle:10,1');
+
+// 403 Forbidden (untuk role/access_area deny)
+Route::get('/forbidden', fn () => view('errors.403'))->name('forbidden');
+
+// Protected — harus login SSO
+Route::middleware(['sso.auth', 'sso.alive'])->group(function () {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // Contoh: hanya role admin atau super_admin
+    Route::middleware(['role:admin,super_admin'])->group(function () {
+        Route::get('/admin-area', ...)->name('test.admin');
+    });
+
+    // Contoh: hanya access_area portal
+    Route::middleware(['access_area:portal'])->group(function () {
+        Route::get('/akses-area', ...)->name('test.aksesarea');
+    });
+});
 ```
 
-### Penggunaan Middleware di Routes
+> **Penting:**
+> - Route `sso.logout-callback` harus pakai `withoutMiddleware([ValidateCsrfToken::class])` (Laravel 11/12).
+> - Import `ValidateCsrfToken` dari `Illuminate\Foundation\Http\Middleware\ValidateCsrfToken`.
 
-```php
-// Hanya user yang sudah login
-Route::get('/dashboard', DashboardController::class)->middleware('sso.auth');
+---
 
-// Hanya user dengan role tertentu (salah satu sudah cukup)
-Route::get('/admin/users', AdminUserController::class)
-    ->middleware(['sso.auth', 'sso.role:admin,super_admin']);
+## Langkah 9: View SSO Not Configured
 
-// Hanya user dengan access area tertentu
-Route::get('/reports', ReportController::class)
-    ->middleware(['sso.auth', 'sso.access_area:reporting']);
-
-// Kombinasi role DAN access area
-Route::get('/supervisor/approvals', ApprovalController::class)->middleware([
-    'sso.auth',
-    'sso.role:admin,super_admin',
-    'sso.access_area:supervisor',
-]);
-```
-
-### Helper untuk Akses Data User di Controller atau View
-
-```php
-// Di Controller
-$user        = session('sso_user');
-$roles       = $user['roles'] ?? [];
-$accessAreas = $user['access_areas'] ?? [];
-
-// Cek manual
-if (in_array('admin', $roles)) {
-    // lakukan sesuatu
-}
-```
+Buat `resources/views/auth/sso-not-configured.blade.php`:
 
 ```blade
-{{-- Di Blade View --}}
-@php $user = session('sso_user'); @endphp
+@extends('layouts.app')
 
-<p>Halo, {{ $user['name'] }}</p>
+@section('title', 'SSO Belum Dikonfigurasi')
 
-@if(in_array('admin', $user['roles'] ?? []))
-    <a href="/admin">Panel Admin</a>
-@endif
+@section('content')
+<div class="max-w-2xl mx-auto px-4 py-24 text-center">
+    <h1 class="text-2xl font-bold mb-2">SSO Belum Dikonfigurasi</h1>
+    <p class="text-slate-600 dark:text-slate-400 mb-6">
+        Set variabel di <code class="px-1.5 py-0.5 rounded bg-slate-100">.env</code>:
+        <code>AUTH_BASE_URL</code>, <code>AUTH_CLIENT_ID</code>, <code>AUTH_CLIENT_SECRET</code>.
+    </p>
+    <a href="{{ route('home') }}" class="inline-flex items-center px-4 py-2 rounded-lg bg-slate-200 font-medium">Kembali</a>
+</div>
+@endsection
 ```
 
 ---
 
-## Global Logout (Webhook)
+## Langkah 10: Migrasi & Session
 
-Fitur ini memungkinkan semua client otomatis logout ketika user logout dari mana saja (SSO atau client lain).
+1. Pastikan tabel `sessions` ada. Di Laravel default, sudah ada di migration `create_users_table` (Schema::create('sessions', ...)). Jika belum:
+   ```bash
+   php artisan make:session-table
+   ```
 
-### Cara Kerja
+2. Jalankan migrasi:
+   ```bash
+   php artisan migrate
+   ```
 
-```
-User logout dari Client A atau SSO
-         │
-         ▼
-SSO Server broadcast POST ke semua client:
-         │
-         ├──► POST https://client-a.example.com/auth/sso/logout-callback
-         ├──► POST https://client-b.example.com/auth/sso/logout-callback
-         └──► POST https://client-c.example.com/auth/sso/logout-callback
-```
-
-### Payload Webhook
-
-```json
-{
-    "event":     "global_logout",
-    "user_id":   "1",
-    "email":     "user@example.com",
-    "timestamp": 1708430400
-}
-```
-
-Header yang dikirim SSO Server:
-
-```
-X-SSO-Signature: <hmac-sha256-hex>
-X-SSO-Event: global_logout
-```
-
-### Verifikasi Signature
-
-Signature dihitung dari **raw request body** menggunakan HMAC-SHA256:
-
-```
-signature = HMAC-SHA256(raw_body, SSO_WEBHOOK_SECRET)
-```
-
-> **Penting:** Selalu gunakan `$request->getContent()` (raw body), bukan `$request->all()` (parsed), agar signature cocok.
-
-### Aktifkan di SSO Server
-
-1. Buka halaman **Info Client** di SSO Server
-2. Klik **"Aktifkan Global Logout"**
-3. Salin **Webhook Secret** yang ditampilkan (hanya ditampilkan sekali)
-4. Tambahkan ke `.env` client: `SSO_WEBHOOK_SECRET=...`
+3. Pastikan `SESSION_DRIVER=database` dan `SESSION_ENCRYPT=true` di `.env`.
 
 ---
 
-## Alur Lengkap
+## Alur Login & Troubleshooting
+
+### Alur Login
 
 ```
-1. User buka /dashboard → middleware sso.auth → belum login
-         │
-         ▼
-2. Redirect ke /auth/sso
-         │
-         ▼
-3. SsoAuthController::redirect() → generate state → redirect ke SSO /oauth/authorize
-         │
-         ▼
-4. User login di SSO Server & approve
-         │
-         ▼
-5. SSO redirect ke /auth/callback?code=xxx&state=yyy
-         │
-         ▼
-6. SsoAuthController::callback()
-   ├─ Validasi state
-   ├─ POST /oauth/token → dapat access_token & refresh_token
-   ├─ GET /api/user → dapat data user (id, name, email, roles, access_areas)
-   └─ Simpan ke session
-         │
-         ▼
-7. Redirect ke /dashboard → user sudah login ✓
+User buka /dashboard
+    → middleware sso.auth: belum login
+    → redirect ke /login (route 'login')
+    → AuthController::redirect() → redirect ke SSO /oauth/authorize
+    → User login di SSO
+    → SSO redirect ke /auth/callback?code=...&state=...
+    → AuthController::callback(): tukar code → token → user → session
+    → redirect ke /dashboard
 ```
 
----
+### Troubleshooting
 
-## Troubleshooting
-
-**Redirect loop saat login**
-Pastikan session driver berfungsi dengan benar dan `APP_KEY` sudah di-set di `.env`.
-
-**Error "Invalid state parameter"**
-Terjadi jika session expired sebelum callback. Pastikan `SESSION_LIFETIME` cukup panjang dan domain session sudah benar.
-
-**Error "Invalid redirect URI" dari SSO**
-Redirect URI di `.env` harus **sama persis** dengan yang terdaftar di SSO Server (termasuk trailing slash dan protokol http/https).
-
-**Signature invalid pada webhook**
-Pastikan `SSO_WEBHOOK_SECRET` sama persis dengan yang di halaman Info Client SSO. Gunakan `$request->getContent()` (raw body) saat menghitung signature.
-
-**Webhook tidak diterima**
-Pastikan URL callback client bisa diakses dari server SSO (bukan localhost ke production). Cek log SSO di `storage/logs/laravel.log`.
+| Masalah | Solusi |
+|---------|--------|
+| Redirect loop | Pastikan `APP_KEY` ada, session driver berfungsi |
+| Invalid state | Session expired sebelum callback. Naikkan `SESSION_LIFETIME` |
+| Invalid redirect URI | Redirect URI di SSO harus sama persis dengan client (termasuk http/https) |
+| Gagal token exchange | Cek AUTH_BASE_URL, Client ID/Secret, Redirect URI di SSO |
+| Webhook signature invalid | Pastikan `SSO_WEBHOOK_SECRET` sama dengan yang di SSO |
+| Session tidak terhapus saat Global Logout | Pastikan `SESSION_DRIVER=database` dan payload di-decode base64 (sudah di controller) |
 
 ---
 
 ## Checklist Integrasi
 
-- [ ] `SSO_BASE_URL`, `SSO_CLIENT_ID`, `SSO_CLIENT_SECRET`, `SSO_REDIRECT_URI` sudah diisi di `.env`
-- [ ] `config/services.php` sudah dikonfigurasi
-- [ ] `SsoAuthController` sudah dibuat (method `redirect` & `callback`)
-- [ ] `LogoutController` sudah dibuat
-- [ ] Routes `/auth/sso` dan `/auth/callback` sudah ditambahkan
-- [ ] Middleware `sso.auth`, `sso.role`, `sso.access_area` sudah didaftarkan
-- [ ] Protected routes sudah menggunakan middleware yang sesuai
-- [ ] *(Opsional)* `SSO_WEBHOOK_SECRET` sudah diisi dan `SsoLogoutCallbackController` sudah dibuat
-- [ ] *(Opsional)* Route `/auth/sso/logout-callback` sudah dikecualikan dari CSRF
+- [ ] `.env`: `AUTH_BASE_URL`, `AUTH_CLIENT_ID`, `AUTH_CLIENT_SECRET`, `APP_URL`
+- [ ] `.env`: `SESSION_DRIVER=database`, `SESSION_ENCRYPT=true`
+- [ ] `config/services.php`: array `mixuauth` dengan `webhook_secret`
+- [ ] `app/Services/SSOAuthService.php` dibuat
+- [ ] `app/Http/Controllers/Auth/AuthController.php` dibuat
+- [ ] `app/Http/Controllers/SsoLogoutCallbackController.php` dibuat
+- [ ] Middleware: `EnsureSSOAuthenticated`, `EnsureSSOSessionAlive`, `CheckRole`, `CheckAccessArea`
+- [ ] `bootstrap/app.php`: alias middleware
+- [ ] `routes/web.php`: login, callback, logout, logout-callback (tanpa CSRF), protected routes
+- [ ] View `auth/sso-not-configured.blade.php`
+- [ ] Migrasi dijalankan (termasuk tabel sessions)
+- [ ] Di SSO Server: Client terdaftar, Redirect URI = `{APP_URL}/auth/callback`
+- [ ] (Opsional) Global Logout: `SSO_WEBHOOK_SECRET` diisi, Aktifkan di SSO
 
 ---
 
-*Dokumentasi ini merujuk pada MixuAuth SSO Server berbasis Laravel Passport dengan OAuth2 Authorization Code Grant.*
+*Guide ini sesuai dengan project referensi MixuAuth SSO Client (Laravel 11/12).*
