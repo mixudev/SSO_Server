@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActivityLog;
+use App\Services\ActivityLogService;
 use App\Models\Role;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,16 +35,10 @@ class AdminRoleController extends Controller
 
         $role = Role::create($validated);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.role.created',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'role_id' => $role->id,
-                'name' => $role->name,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.role.created', [
+            'role_id' => $role->id,
+            'name' => $role->name,
+        ], $request);
 
         return redirect()
             ->route('admin.roles.index')
@@ -67,16 +61,10 @@ class AdminRoleController extends Controller
 
         $role->update($validated);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.role.updated',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'role_id' => $role->id,
-                'name' => $role->name,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.role.updated', [
+            'role_id' => $role->id,
+            'name' => $role->name,
+        ], $request);
 
         return redirect()
             ->route('admin.roles.index')
@@ -90,16 +78,10 @@ class AdminRoleController extends Controller
 
         $role->delete();
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.role.deleted',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'role_id' => $roleId,
-                'name' => $name,
-            ],
-        ]);
+        app(ActivityLogService::class)->warning('admin.role.deleted', [
+            'role_id' => $roleId,
+            'name' => $name,
+        ], $request);
 
         return redirect()
             ->route('admin.roles.index')

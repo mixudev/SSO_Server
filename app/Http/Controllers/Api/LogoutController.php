@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\ActivityLogService;
 use App\Services\GlobalLogoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,11 @@ class LogoutController extends Controller
             }
 
             $userId = $user->id;
+
+            app(ActivityLogService::class)->info('api.logout', [
+                'user_id' => $userId,
+                'source' => 'api',
+            ], $request);
 
             // Broadcast global logout ke semua client (notifikasi logout ke aplikasi lain)
             app(GlobalLogoutService::class)->broadcastLogout($user);
@@ -117,6 +123,11 @@ class LogoutController extends Controller
                 $revokedCount++;
             }
 
+            app(ActivityLogService::class)->warning('api.revoke_token', [
+                'user_id' => $userId,
+                'revoked_count' => $revokedCount,
+            ], $request);
+
             return response()->json([
                 'message' => "Successfully revoked {$revokedCount} token(s). Session remains active.",
                 'revoked_count' => $revokedCount,
@@ -126,7 +137,7 @@ class LogoutController extends Controller
 
         } catch (\Throwable $e) {
             report($e);
-            
+
             return response()->json([
                 'message' => 'Failed to revoke token.',
                 'success' => false,
@@ -160,6 +171,11 @@ class LogoutController extends Controller
             }
 
             $userId = $user->id;
+
+            app(ActivityLogService::class)->info('api.logout_all', [
+                'user_id' => $userId,
+                'source' => 'api',
+            ], $request);
 
             // 1. Broadcast global logout ke semua client (client clear session lokal)
             app(GlobalLogoutService::class)->broadcastLogout($user);

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActivityLog;
+use App\Services\ActivityLogService;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\AccessArea;
@@ -79,17 +79,12 @@ class AdminUserController extends Controller
             $user->accessAreas()->sync($accessAreas);
         }
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.user.created',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'target_user_id' => $user->id,
-                'roles' => $roles,
-                'access_areas' => $accessAreas,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.user.created', [
+            'target_user_id' => $user->id,
+            'target_email' => $user->email,
+            'roles' => $roles,
+            'access_areas' => $accessAreas,
+        ], $request);
 
         return redirect()
             ->route('admin.users.index')
@@ -109,16 +104,10 @@ class AdminUserController extends Controller
 
         $user->delete();
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.user.deleted',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'target_user_id' => $targetId,
-                'email' => $email,
-            ],
-        ]);
+        app(ActivityLogService::class)->warning('admin.user.deleted', [
+            'target_user_id' => $targetId,
+            'email' => $email,
+        ], $request);
 
         return redirect()
             ->route('admin.users.index')
@@ -140,17 +129,12 @@ class AdminUserController extends Controller
         $user->roles()->sync($roles);
         $user->accessAreas()->sync($accessAreas);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.user.updated',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'target_user_id' => $user->id,
-                'roles' => $roles,
-                'access_areas' => $accessAreas,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.user.updated', [
+            'target_user_id' => $user->id,
+            'target_email' => $user->email,
+            'roles' => $roles,
+            'access_areas' => $accessAreas,
+        ], $request);
 
         return redirect()
             ->route('admin.users.index', $request->query())

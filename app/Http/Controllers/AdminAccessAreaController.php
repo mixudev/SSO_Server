@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AccessArea;
-use App\Models\ActivityLog;
+use App\Services\ActivityLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -36,16 +36,10 @@ class AdminAccessAreaController extends Controller
 
         $area = AccessArea::create($validated);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.access_area.created',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'access_area_id' => $area->id,
-                'slug' => $area->slug,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.access_area.created', [
+            'access_area_id' => $area->id,
+            'slug' => $area->slug,
+        ], $request);
 
         return redirect()
             ->route('admin.access-areas.index')
@@ -69,16 +63,10 @@ class AdminAccessAreaController extends Controller
 
         $accessArea->update($validated);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.access_area.updated',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'access_area_id' => $accessArea->id,
-                'slug' => $accessArea->slug,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.access_area.updated', [
+            'access_area_id' => $accessArea->id,
+            'slug' => $accessArea->slug,
+        ], $request);
 
         return redirect()
             ->route('admin.access-areas.index')
@@ -92,16 +80,10 @@ class AdminAccessAreaController extends Controller
 
         $accessArea->delete();
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.access_area.deleted',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'access_area_id' => $id,
-                'slug' => $slug,
-            ],
-        ]);
+        app(ActivityLogService::class)->warning('admin.access_area.deleted', [
+            'access_area_id' => $id,
+            'slug' => $slug,
+        ], $request);
 
         return redirect()
             ->route('admin.access-areas.index')

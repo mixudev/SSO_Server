@@ -351,14 +351,17 @@ SSO_WEBHOOK_SECRET=<span class="text-amber-400">{{ !empty($plainWebhookSecret) ?
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <svg id="btn-test-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <!-- <svg id="btn-test-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg> -->
+                        <svg id="btn-test-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-send" viewBox="0 0 16 16">
+                            <path d="M15.854.146a.5.5 0 0 1 .11.54l-5.819 14.547a.75.75 0 0 1-1.329.124l-3.178-4.995L.643 7.184a.75.75 0 0 1 .124-1.33L15.314.037a.5.5 0 0 1 .54.11ZM6.636 10.07l2.761 4.338L14.13 2.576zm6.787-8.201L1.591 6.602l4.339 2.76z"/>
                         </svg>
                         <span id="btn-test-text">Kirim Test Webhook</span>
                     </button>
                     <div id="test-result" class="mt-5 hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 overflow-hidden">
                         <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                            <span id="test-result-title" class="text-sm font-semibold">Hasil Test</span>
+                            <span id="test-result-title" class="text-sm font-semibold text-slate-700 dark:text-slate-200">Hasil Test</span>
                             <span id="test-result-badge" class="text-xs font-bold px-2.5 py-1 rounded-full"></span>
                         </div>
                         <div class="p-4 space-y-4 text-xs font-mono overflow-x-auto">

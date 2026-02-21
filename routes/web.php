@@ -63,6 +63,9 @@ Route::middleware(['auth', 'verified', 'admin'])
         Route::post('/clients/clear-secret-session', [AdminClientController::class, 'clearSecretSession'])->name('clients.clear-secret-session');
 
         Route::get('/logs', [AdminActivityLogController::class, 'index'])->name('logs.index');
+        Route::delete('/logs', [AdminActivityLogController::class, 'destroyBulk'])->name('logs.destroy-bulk');
+        Route::get('/logs/{log}', [AdminActivityLogController::class, 'show'])->name('logs.show');
+        Route::delete('/logs/{log}', [AdminActivityLogController::class, 'destroy'])->name('logs.destroy');
     });
 
 require __DIR__.'/auth.php';

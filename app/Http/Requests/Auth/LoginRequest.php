@@ -44,6 +44,11 @@ class LoginRequest extends FormRequest
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
+            app(\App\Services\ActivityLogService::class)->critical('auth.login.failed', [
+                'email' => $this->string('email')->toString(),
+                'reason' => 'Invalid credentials',
+            ], $this);
+
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
             ]);
@@ -62,6 +67,12 @@ class LoginRequest extends FormRequest
         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
             return;
         }
+
+        app(\App\Services\ActivityLogService::class)->critical('auth.login.lockout', [
+            'email' => $this->string('email')->toString(),
+            'ip' => $this->ip(),
+            'reason' => 'Too many failed attempts',
+        ], $this);
 
         event(new Lockout($this));
 

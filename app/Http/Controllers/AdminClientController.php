@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActivityLog;
+use App\Services\ActivityLogService;
 use App\Models\AccessArea;
 use App\Models\ClientApp;
 use Illuminate\Http\Request;
@@ -53,16 +53,10 @@ class AdminClientController extends Controller
 
         $client = ClientApp::create($validated);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.client.created',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'client_app_id' => $client->id,
-                'slug' => $client->slug,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.client.created', [
+            'client_app_id' => $client->id,
+            'slug' => $client->slug,
+        ], $request);
 
         return redirect()
             ->route('admin.clients.index')
@@ -95,16 +89,10 @@ class AdminClientController extends Controller
 
         $client->update($validated);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.client.updated',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'client_app_id' => $client->id,
-                'slug' => $client->slug,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.client.updated', [
+            'client_app_id' => $client->id,
+            'slug' => $client->slug,
+        ], $request);
 
         return redirect()
             ->route('admin.clients.index')
@@ -123,16 +111,10 @@ class AdminClientController extends Controller
 
         $client->delete();
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.client.deleted',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'client_app_id' => $clientId,
-                'slug' => $slug,
-            ],
-        ]);
+        app(ActivityLogService::class)->warning('admin.client.deleted', [
+            'client_app_id' => $clientId,
+            'slug' => $slug,
+        ], $request);
 
         return redirect()
             ->route('admin.clients.index')
@@ -197,17 +179,11 @@ class AdminClientController extends Controller
             'encrypted_webhook_secret' => Crypt::encryptString($webhookSecret),
         ]);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.client.passport_generated',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'client_app_id' => $client->id,
-                'slug' => $client->slug,
-                'oauth_client_id' => $passportClient->id,
-            ],
-        ]);
+        app(ActivityLogService::class)->info('admin.client.passport_generated', [
+            'client_app_id' => $client->id,
+            'slug' => $client->slug,
+            'oauth_client_id' => $passportClient->id,
+        ], $request);
 
         // Simpan plain secret dan webhook secret di session untuk ditampilkan sekali
         $request->session()->put('passport_client_secret', $clientSecret);
@@ -245,13 +221,10 @@ class AdminClientController extends Controller
         $request->session()->put('passport_webhook_secret', $webhookSecret);
         $request->session()->put('show_secret_once', true);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.client.webhook_secret_regenerated',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => ['client_app_id' => $client->id, 'slug' => $client->slug],
-        ]);
+        app(ActivityLogService::class)->info('admin.client.webhook_secret_regenerated', [
+            'client_app_id' => $client->id,
+            'slug' => $client->slug,
+        ], $request);
 
         return redirect()
             ->route('admin.clients.info', $client)
@@ -318,17 +291,11 @@ class AdminClientController extends Controller
             'encrypted_webhook_secret' => null,
         ]);
 
-        ActivityLog::create([
-            'user_id' => $request->user()->id,
-            'action' => 'admin.client.passport_deleted',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [
-                'client_app_id' => $client->id,
-                'slug' => $client->slug,
-                'oauth_client_id' => $oauthClientId,
-            ],
-        ]);
+        app(ActivityLogService::class)->warning('admin.client.passport_deleted', [
+            'client_app_id' => $client->id,
+            'slug' => $client->slug,
+            'oauth_client_id' => $oauthClientId,
+        ], $request);
 
         return redirect()
             ->route('admin.clients.index')

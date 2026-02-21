@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\ActivityLog;
+use App\Services\ActivityLogService;
 use App\Services\GlobalLogoutService;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
@@ -30,13 +30,9 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        ActivityLog::create([
-            'user_id' => $request->user()?->id,
-            'action' => 'auth.login',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [],
-        ]);
+        app(ActivityLogService::class)->info('auth.login', [
+            'session_id' => $request->session()->getId(),
+        ], $request);
 
         return redirect()->intended(route('dashboard', absolute: false));
     }
@@ -48,13 +44,10 @@ class AuthenticatedSessionController extends Controller
     {
         $user = $request->user();
 
-        ActivityLog::create([
+        app(ActivityLogService::class)->info('auth.logout', [
             'user_id' => $user?->id,
-            'action' => 'auth.logout',
-            'ip_address' => $request->ip(),
-            'user_agent' => (string) $request->userAgent(),
-            'context' => [],
-        ]);
+            'session_id' => $request->session()->getId(),
+        ], $request, $user?->id);
 
         // Broadcast global logout ke semua client sebelum destroy session
         if ($user) {
