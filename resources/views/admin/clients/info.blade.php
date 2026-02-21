@@ -68,6 +68,13 @@
                         <label class="block text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Callback URL</label>
                         <code class="text-sm font-mono text-slate-700 dark:text-slate-300 break-all">{{ rtrim($client->base_url, '/') }}/auth/callback</code>
                     </div>
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Global Logout Callback URL</label>
+                        <code class="text-sm font-mono text-slate-700 dark:text-slate-300 break-all">{{ $client->logout_callback_url ?? rtrim($client->base_url, '/') . '/auth/sso/logout-callback' }}</code>
+                        @if (empty($client->encrypted_webhook_secret))
+                            <p class="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400">Global Logout belum diaktifkan. Klik "Aktifkan Global Logout" di bawah.</p>
+                        @endif
+                    </div>
                 </div>
             </div>
 
@@ -181,6 +188,34 @@
                         @endif
                     </div>
 
+                    {{-- Webhook Secret (untuk Global Logout) --}}
+                    <div>
+                        <label class="block text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Webhook Secret (Global Logout)</label>
+                        @if (!empty($plainWebhookSecret) && $showSecretOnce)
+                            <div class="relative mb-2">
+                                <input type="password" id="webhook-secret" value="{{ $plainWebhookSecret }}" readonly
+                                    class="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-3 text-sm font-mono text-slate-800 dark:text-slate-200 pr-24">
+                                <button type="button" onclick="copyToClipboard('webhook-secret', 'btn-webhook-secret', 'indigo')" id="btn-webhook-secret"
+                                    class="copy-btn absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-white"
+                                    style="background: linear-gradient(135deg, #4f46e5, #7c3aed);">
+                                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"/></svg>
+                                    Copy
+                                </button>
+                            </div>
+                            <p class="text-xs text-amber-600 dark:text-amber-400">Tambahkan ke <code class="font-mono">.env</code> client sebagai <code>SSO_WEBHOOK_SECRET</code>. Hanya ditampilkan sekali.</p>
+                        @elseif (!empty($client->encrypted_webhook_secret))
+                            <p class="text-sm text-slate-600 dark:text-slate-400">✓ Global Logout aktif. Client harus punya <code class="font-mono text-xs">SSO_WEBHOOK_SECRET</code> di .env.</p>
+                        @else
+                            <form method="POST" action="{{ route('admin.clients.regenerate-webhook-secret', $client) }}" class="inline">
+                                @csrf
+                                <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 px-3 py-2 text-xs font-semibold text-white">
+                                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    Aktifkan Global Logout
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+
                     {{-- Grant Types --}}
                     <div>
                         <label class="block text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Grant Types</label>
@@ -233,7 +268,11 @@
 SSO_BASE_URL=<span class="text-emerald-400">{{ config('app.url') }}</span>
 SSO_CLIENT_ID=<span class="text-amber-400">{{ $passportClient->id }}</span>
 SSO_CLIENT_SECRET=<span class="text-amber-400">{{ !empty($plainSecret) ? $plainSecret : 'PASTE_SECRET_HERE' }}</span>
-SSO_REDIRECT_URI=<span class="text-emerald-400">{{ rtrim($client->base_url, '/') }}/auth/callback</span></pre>
+SSO_REDIRECT_URI=<span class="text-emerald-400">{{ rtrim($client->base_url, '/') }}/auth/callback</span>
+@if (!empty($plainWebhookSecret) || $client->encrypted_webhook_secret)
+SSO_WEBHOOK_SECRET=<span class="text-amber-400">{{ !empty($plainWebhookSecret) ? $plainWebhookSecret : 'PASTE_WEBHOOK_SECRET_HERE' }}</span>
+@endif
+</pre>
                         </div>
                         @if (empty($plainSecret))
                             <p class="mt-1.5 text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
@@ -290,6 +329,64 @@ SSO_REDIRECT_URI=<span class="text-emerald-400">{{ rtrim($client->base_url, '/')
                     </div>
                 </div>
             </div>
+
+            {{-- ══ Test Global Logout ══ --}}
+            @if (!empty($client->encrypted_webhook_secret))
+            <div class="rounded-xl border border-slate-200 dark:border-slate-700/60 bg-white dark:bg-slate-800/60 shadow-sm overflow-hidden" id="test-global-logout-card">
+                <div class="flex items-center gap-2.5 px-6 py-4 border-b border-slate-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-900/20">
+                    <div class="w-6 h-6 rounded-lg bg-cyan-100 dark:bg-cyan-900/40 flex items-center justify-center">
+                        <svg class="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">Test Global Logout</h3>
+                </div>
+                <div class="p-6">
+                    <p class="text-xs text-slate-600 dark:text-slate-400 mb-4">
+                        Kirim webhook test ke client untuk memastikan endpoint logout callback berfungsi dengan benar.
+                    </p>
+                    <button type="button" id="btn-test-logout"
+                        class="inline-flex items-center gap-2 rounded-xl bg-cyan-600 hover:bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg id="btn-test-spinner" class="h-4 w-4 hidden animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <svg id="btn-test-icon" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span id="btn-test-text">Kirim Test Webhook</span>
+                    </button>
+                    <div id="test-result" class="mt-5 hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 overflow-hidden">
+                        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                            <span id="test-result-title" class="text-sm font-semibold">Hasil Test</span>
+                            <span id="test-result-badge" class="text-xs font-bold px-2.5 py-1 rounded-full"></span>
+                        </div>
+                        <div class="p-4 space-y-4 text-xs font-mono overflow-x-auto">
+                            <div>
+                                <div class="text-slate-500 dark:text-slate-400 mb-1">URL</div>
+                                <div id="test-result-url" class="text-slate-800 dark:text-slate-200 break-all"></div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500 dark:text-slate-400 mb-1">Payload</div>
+                                <pre id="test-result-payload" class="text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words bg-white dark:bg-slate-800 p-3 rounded-lg overflow-x-auto"></pre>
+                            </div>
+                            <div>
+                                <div class="text-slate-500 dark:text-slate-400 mb-1">HTTP Status</div>
+                                <div id="test-result-status" class="text-slate-800 dark:text-slate-200"></div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500 dark:text-slate-400 mb-1">Response Body</div>
+                                <pre id="test-result-body" class="text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words bg-white dark:bg-slate-800 p-3 rounded-lg overflow-x-auto max-h-40"></pre>
+                            </div>
+                            <div id="test-result-error-wrap" class="hidden">
+                                <div class="text-slate-500 dark:text-slate-400 mb-1">Error</div>
+                                <div id="test-result-error" class="text-red-600 dark:text-red-400"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @endif
 
             {{-- ══ Actions ══ --}}
             <div class="flex items-center justify-between gap-3">
@@ -377,6 +474,81 @@ SSO_REDIRECT_URI=<span class="text-emerald-400">{{ rtrim($client->base_url, '/')
                 }
             });
         }, 5000);
+    });
+    @endif
+
+    // ── Test Global Logout ──
+    @if (!empty($client->encrypted_webhook_secret))
+    document.getElementById('btn-test-logout')?.addEventListener('click', function () {
+        const btn = this;
+        const spinner = document.getElementById('btn-test-spinner');
+        const icon = document.getElementById('btn-test-icon');
+        const text = document.getElementById('btn-test-text');
+        const resultDiv = document.getElementById('test-result');
+        const resultTitle = document.getElementById('test-result-title');
+        const resultBadge = document.getElementById('test-result-badge');
+        const resultUrl = document.getElementById('test-result-url');
+        const resultPayload = document.getElementById('test-result-payload');
+        const resultStatus = document.getElementById('test-result-status');
+        const resultBody = document.getElementById('test-result-body');
+        const resultErrorWrap = document.getElementById('test-result-error-wrap');
+        const resultError = document.getElementById('test-result-error');
+
+        btn.disabled = true;
+        spinner.classList.remove('hidden');
+        icon.classList.add('hidden');
+        text.textContent = 'Mengirim...';
+
+        fetch('{{ route("admin.clients.test-global-logout", $client) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
+            body: '{}'
+        })
+        .then(async r => {
+            const text = await r.text();
+            try { return JSON.parse(text); } catch { return { success: false, error: 'Invalid response: ' + (r.status ? 'HTTP ' + r.status : text.slice(0, 100)) }; }
+        })
+        .then(data => {
+            resultDiv.classList.remove('hidden');
+            resultUrl.textContent = data.url || '—';
+            resultPayload.textContent = JSON.stringify(data.payload || {}, null, 2);
+            resultStatus.textContent = data.status != null ? data.status + ' ' + (data.success ? 'OK' : '') : '—';
+            resultBody.textContent = data.body || '(kosong)';
+            resultErrorWrap.classList.toggle('hidden', !data.error);
+            resultError.textContent = data.error || '';
+
+            if (data.success) {
+                resultBadge.textContent = 'SUKSES';
+                resultBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300';
+                resultTitle.textContent = 'Hasil Test — Webhook diterima client';
+            } else {
+                resultBadge.textContent = 'GAGAL';
+                resultBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+                resultTitle.textContent = 'Hasil Test — Webhook gagal';
+            }
+        })
+        .catch(err => {
+            resultDiv.classList.remove('hidden');
+            resultUrl.textContent = '—';
+            resultPayload.textContent = '—';
+            resultStatus.textContent = '—';
+            resultBody.textContent = '(request gagal)';
+            resultErrorWrap.classList.remove('hidden');
+            resultError.textContent = err.message || 'Network error';
+            resultBadge.textContent = 'ERROR';
+            resultBadge.className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300';
+            resultTitle.textContent = 'Hasil Test — Request gagal';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            spinner.classList.add('hidden');
+            icon.classList.remove('hidden');
+            text.textContent = 'Kirim Test Webhook';
+        });
     });
     @endif
     </script>

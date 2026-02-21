@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Services\GlobalLogoutService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,9 @@ class LogoutController extends Controller
             }
 
             $userId = $user->id;
+
+            // Broadcast global logout ke semua client (notifikasi logout ke aplikasi lain)
+            app(GlobalLogoutService::class)->broadcastLogout($user);
 
             // Hanya hapus session web di SSO Server
             // Token OAuth TIDAK di-revoke, tetap bisa digunakan untuk API calls
@@ -132,21 +136,23 @@ class LogoutController extends Controller
     }
 
     /**
-     * POST /api/logout-all - Logout lengkap: revoke semua token + logout semua session.
-     * 
+     * POST /api/logout-all - Logout dari semua session (TIDAK revoke token OAuth).
+     *
      * Endpoint ini akan:
-     * 1. Revoke semua access token dan refresh token milik user
+     * 1. Broadcast global logout ke semua client (client clear session lokal)
      * 2. Hapus semua session web di SSO Server
-     * 
-     * Berguna untuk "logout dari semua perangkat" atau security breach.
-     * 
+     * 3. Token OAuth TIDAK di-revoke — izin client tetap aktif
+     *
+     * Dengan ini, user yang sudah pernah memberi izin ke client tidak perlu approve lagi
+     * saat login berikutnya. Izin dicabut hanya via /api/revoke-token atau admin.
+     *
      * Client harus mengirim Authorization: Bearer {access_token}
      */
     public function logoutAll(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
-            
+
             if (! $user) {
                 return response()->json([
                     'message' => 'Unauthenticated.',
@@ -155,39 +161,20 @@ class LogoutController extends Controller
 
             $userId = $user->id;
 
-            // 1. Revoke semua token aktif milik user
-            $tokens = Token::where('user_id', $userId)
-                ->where('revoked', false)
-                ->get();
+            // 1. Broadcast global logout ke semua client (client clear session lokal)
+            app(GlobalLogoutService::class)->broadcastLogout($user);
 
-            $revokedCount = 0;
-
-            foreach ($tokens as $token) {
-                // Revoke access token
-                $token->revoke();
-                
-                // Cari dan revoke refresh token terkait
-                $refreshToken = RefreshToken::where('access_token_id', $token->id)
-                    ->where('revoked', false)
-                    ->first();
-                
-                if ($refreshToken) {
-                    $refreshToken->revoke();
-                }
-                
-                $revokedCount++;
-            }
-
-            // 2. Hapus semua session web milik user
+            // 2. Hapus semua session web milik user (TIDAK revoke token — izin client tetap)
             $sessionDeleted = DB::table('sessions')
                 ->where('user_id', $userId)
                 ->delete();
 
             return response()->json([
-                'message' => "Successfully logged out from all devices. {$revokedCount} token(s) revoked and all SSO sessions cleared. You must login again.",
-                'revoked_count' => $revokedCount,
+                'message' => 'Successfully logged out from all devices. All SSO sessions cleared. OAuth tokens remain valid — you will not need to re-approve clients.',
+                'revoked_count' => 0,
                 'sessions_deleted' => $sessionDeleted,
                 'session_cleared' => true,
+                'tokens_revoked' => false,
                 'success' => true,
             ], 200);
 

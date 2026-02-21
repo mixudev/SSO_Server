@@ -2,6 +2,8 @@
 
 Panduan lengkap untuk mengimplementasikan fitur logout di aplikasi client yang terhubung ke MixuAuth SSO Server.
 
+> **Global Logout:** Jika Anda ingin ketika user logout dari SSO atau salah satu client, semua client otomatis logout, lihat **[Panduan Global Logout](GLOBAL_LOGOUT_CLIENT_GUIDE.md)**.
+
 ---
 
 ## 📋 Daftar Isi

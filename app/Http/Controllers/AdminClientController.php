@@ -8,10 +8,12 @@ use App\Models\ClientApp;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
-use Laravel\Passport\Client;
+use App\Models\PassportClient;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use App\Services\GlobalLogoutService;
 
 class AdminClientController extends Controller
 {
@@ -116,7 +118,7 @@ class AdminClientController extends Controller
 
         // Hapus Passport Client jika ada
         if ($client->oauth_client_id) {
-            Client::where('id', $client->oauth_client_id)->delete();
+            PassportClient::where('id', $client->oauth_client_id)->delete();
         }
 
         $client->delete();
@@ -162,7 +164,6 @@ class AdminClientController extends Controller
         $callbackUrl = rtrim($client->base_url, '/') . '/auth/callback';
 
         // Buat Passport Client langsung menggunakan DB
-        // Struktur sesuai dengan tabel oauth_clients (tanpa kolom redirect, personal_access_client, password_client)
         $clientId = (string) Str::uuid();
         $clientSecret = Str::random(40);
         
@@ -183,11 +184,17 @@ class AdminClientController extends Controller
         ]);
         
         // Ambil client yang baru dibuat
-        $passportClient = Client::find($clientId);
+        $passportClient = PassportClient::find($clientId);
 
-        // Simpan oauth_client_id ke ClientApp
+        // Generate webhook secret untuk global logout callback
+        $webhookSecret = Str::random(40);
+        $logoutCallbackUrl = rtrim($client->base_url, '/') . '/auth/sso/logout-callback';
+
+        // Simpan oauth_client_id, logout_callback_url, dan encrypted_webhook_secret ke ClientApp
         $client->update([
             'oauth_client_id' => $passportClient->id,
+            'logout_callback_url' => $logoutCallbackUrl,
+            'encrypted_webhook_secret' => Crypt::encryptString($webhookSecret),
         ]);
 
         ActivityLog::create([
@@ -202,14 +209,53 @@ class AdminClientController extends Controller
             ],
         ]);
 
-        // Simpan plain secret di session untuk ditampilkan sekali
-        // Kita akan hapus setelah ditampilkan di view
+        // Simpan plain secret dan webhook secret di session untuk ditampilkan sekali
         $request->session()->put('passport_client_secret', $clientSecret);
+        $request->session()->put('passport_webhook_secret', $webhookSecret);
         $request->session()->put('show_secret_once', true);
         $request->session()->put('passport_client_id', $passportClient->id);
         
         return redirect()
             ->route('admin.clients.info', $client);
+    }
+
+    /**
+     * Regenerate webhook secret untuk Global Logout (client lama yang belum punya).
+     */
+    public function regenerateWebhookSecret(Request $request, ClientApp $client): RedirectResponse
+    {
+        if (! $request->user()->hasRole('super_admin')) {
+            abort(403, 'Hanya superadmin yang dapat regenerate webhook secret.');
+        }
+
+        if (! $client->hasPassportClient() || empty($client->base_url)) {
+            return redirect()
+                ->route('admin.clients.index')
+                ->with('error', 'Client harus punya Passport client dan base_url.');
+        }
+
+        $webhookSecret = Str::random(40);
+        $logoutCallbackUrl = rtrim($client->base_url, '/') . '/auth/sso/logout-callback';
+
+        $client->update([
+            'logout_callback_url' => $logoutCallbackUrl,
+            'encrypted_webhook_secret' => Crypt::encryptString($webhookSecret),
+        ]);
+
+        $request->session()->put('passport_webhook_secret', $webhookSecret);
+        $request->session()->put('show_secret_once', true);
+
+        ActivityLog::create([
+            'user_id' => $request->user()->id,
+            'action' => 'admin.client.webhook_secret_regenerated',
+            'ip_address' => $request->ip(),
+            'user_agent' => (string) $request->userAgent(),
+            'context' => ['client_app_id' => $client->id, 'slug' => $client->slug],
+        ]);
+
+        return redirect()
+            ->route('admin.clients.info', $client)
+            ->with('status', 'Webhook secret berhasil dibuat. Simpan SSO_WEBHOOK_SECRET sekarang.');
     }
 
     public function infoPassportClient(Request $request, ClientApp $client): View
@@ -223,7 +269,7 @@ class AdminClientController extends Controller
             abort(404, 'Client ini belum memiliki Passport client.');
         }
 
-        $passportClient = Client::find($client->oauth_client_id);
+        $passportClient = PassportClient::find($client->oauth_client_id);
 
         if (!$passportClient) {
             abort(404, 'Passport client tidak ditemukan.');
@@ -231,6 +277,7 @@ class AdminClientController extends Controller
 
         // Ambil secret dari session jika ada
         $plainSecret = $request->session()->get('passport_client_secret');
+        $plainWebhookSecret = $request->session()->get('passport_webhook_secret');
         $showSecretOnce = $request->session()->get('show_secret_once', false);
         
         // Jika secret ada dan ini pertama kali, kita akan hapus setelah view ditampilkan
@@ -241,6 +288,7 @@ class AdminClientController extends Controller
             'client' => $client,
             'passportClient' => $passportClient,
             'plainSecret' => $plainSecret,
+            'plainWebhookSecret' => $plainWebhookSecret,
             'showSecretOnce' => $showSecretOnce,
         ]);
     }
@@ -263,9 +311,11 @@ class AdminClientController extends Controller
         // Hapus Passport Client dari database
         DB::table('oauth_clients')->where('id', $oauthClientId)->delete();
 
-        // Hapus oauth_client_id dari ClientApp
+        // Hapus oauth_client_id, logout_callback_url, dan encrypted_webhook_secret dari ClientApp
         $client->update([
             'oauth_client_id' => null,
+            'logout_callback_url' => null,
+            'encrypted_webhook_secret' => null,
         ]);
 
         ActivityLog::create([
@@ -289,9 +339,30 @@ class AdminClientController extends Controller
     {
         // Hapus session secret setelah ditampilkan
         $request->session()->forget('passport_client_secret');
+        $request->session()->forget('passport_webhook_secret');
         $request->session()->forget('show_secret_once');
-        
+
         return response()->json(['success' => true]);
     }
 
+    /**
+     * Test Global Logout webhook ke client - kembalikan hasil lengkap untuk debugging.
+     */
+    public function testGlobalLogout(Request $request, ClientApp $client): \Illuminate\Http\JsonResponse
+    {
+        if (! $request->user()->hasRole('super_admin')) {
+            return response()->json(['success' => false, 'error' => 'Unauthorized'], 403);
+        }
+
+        if (! $client->logout_callback_url && empty($client->base_url)) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Client belum punya base_url atau logout_callback_url.',
+            ], 400);
+        }
+
+        $result = app(GlobalLogoutService::class)->testWebhook($client, $request->user());
+
+        return response()->json($result);
+    }
 }

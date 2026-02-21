@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Services\GlobalLogoutService;
 use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,13 +46,20 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
+        $user = $request->user();
+
         ActivityLog::create([
-            'user_id' => $request->user()?->id,
+            'user_id' => $user?->id,
             'action' => 'auth.logout',
             'ip_address' => $request->ip(),
             'user_agent' => (string) $request->userAgent(),
             'context' => [],
         ]);
+
+        // Broadcast global logout ke semua client sebelum destroy session
+        if ($user) {
+            app(GlobalLogoutService::class)->broadcastLogout($user);
+        }
 
         Auth::guard('web')->logout();
 

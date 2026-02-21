@@ -13,11 +13,13 @@ class ClientApp extends Model
         'name',
         'slug',
         'base_url',
+        'logout_callback_url',
         'category',
         'description',
         'access_area_id',
         'is_active',
         'oauth_client_id',
+        'encrypted_webhook_secret',
     ];
 
     protected $casts = [
@@ -31,7 +33,7 @@ class ClientApp extends Model
 
     public function passportClient()
     {
-        return $this->belongsTo(\Laravel\Passport\Client::class, 'oauth_client_id', 'id');
+        return $this->belongsTo(\App\Models\PassportClient::class, 'oauth_client_id', 'id');
     }
 
     public function hasPassportClient(): bool
