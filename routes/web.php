@@ -68,4 +68,11 @@ Route::middleware(['auth', 'verified', 'admin'])
         Route::delete('/logs/{log}', [AdminActivityLogController::class, 'destroy'])->name('logs.destroy');
     });
 
+// route cek session
+Route::get('/check-session', function () {
+    return response()->json([
+        'session' => session()->all(),
+    ]);
+});
+
 require __DIR__.'/auth.php';
